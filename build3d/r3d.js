@@ -1,7 +1,6 @@
 // =====================================================================
 // ====== 3D 表示（ゲームの中身は 2D 版と共通。描画だけを three.js に） ======
 // =====================================================================
-let SW = 640, SH = 416;   // 重ね表示（名札・吹き出しなど）の論理サイズ。画面の形に合わせて変わる
 const R3 = (() => {
   const stage = $('stage');
   const renderer = new THREE.WebGLRenderer({antialias:true});
@@ -102,7 +101,7 @@ function buildArea(A){
   const R = R3;
   if (W3.group) R.scene.remove(W3.group);
   const grp = new THREE.Group(); R.scene.add(grp);
-  Object.assign(W3, {key: A.key + ':' + (G.seed || 0), group: grp, furn: [], panes: [], lamps: [], swing: [], water: null, rubble: null, green: null, stars: [], torii: null, wheel: null});
+  Object.assign(W3, {key: A.key + ':' + (G.seed || 0), group: grp, furn: [], panes: [], lamps: [], swing: [], water: null, rubble: null, rubbleItems: null, green: null, stars: [], torii: null, wheel: null});
   const ground = paintArea(A, false), top = paintArea(A, true);
   const img = top.canvas.getContext('2d').getImageData(0, 0, top.canvas.width, top.canvas.height);
   const gm = new THREE.MeshStandardMaterial({map: ground.tex, roughness: .9});
@@ -528,16 +527,21 @@ function draw3D(now, dt){
   pGeo.setDrawRange(0, n); pGeo.attributes.position.needsUpdate = true; pGeo.attributes.color.needsUpdate = true;
   // がれき（崩落した場所）
   if (G.res && G.seed && !W3.rubble){
-    W3.rubble = new THREE.Group();
-    for (const q of hz(A).spots) for (let i = 0; i < 5; i++){ const r = bx(.25 + Math.random()*.2, .18 + Math.random()*.15, .25 + Math.random()*.2, m3(i % 2 ? 0x7d7468 : 0xa1958a)); r.position.set(q.x + (Math.random()-.5)*.6, .1, q.y + (Math.random()-.5)*.6); r.rotation.y = Math.random()*3; W3.rubble.add(r); }
+    // 崩落した場所：その場所らしい物が落ちてきて積もる
+    W3.rubble = new THREE.Group(); W3.rubbleItems = [];
+    const t0 = G.fx ? G.fx.t0 : nowMs();
+    for (const q of hz(A).spots){ const items = dropDebris(debrisList(A), q.x, q.y, 7, .8, t0, -.2); items.forEach(m => W3.rubble.add(m)); W3.rubbleItems.push(...items); }
     W3.group.add(W3.rubble);
   }
+  if (W3.rubbleItems) animDebris(W3.rubbleItems, nowMs());
   // 自分に落ちてくる物（看板・天井・がれき）
-  if (G.fx && !G.fx.alive && ['building','debris','blast'].includes(G.fx.cause) && !fallRocks.length){
-    for (let i = 0; i < 6; i++){ const r = bx(.3, .25, .3, m3(G.fx.cause === 'building' ? (i ? 0x9e9e9e : 0xffca28) : 0x8d8d8d)); r.userData = {ox:(Math.random()-.5)*.6, oz:(Math.random()-.5)*.6, d: i*.04}; R.scene.add(r); fallRocks.push(r); }
+  if (G.fx && !G.fx.alive && ['building','debris','blast','landslide','glass'].includes(G.fx.cause) && !fallRocks.length){
+    // 頭上から落ちてくる物も、その場所らしい物（外の建物なら看板・ガラス、土砂崩れなら土砂と岩）
+    const list = G.fx.cause === 'landslide' ? ['soil','soil','stone','branch'] : G.fx.cause === 'glass' ? ['glass','glass','glass'] : G.fx.cause === 'building' && !A.indoor ? (A.bStyle === 'house' || A.bStyle === 'shrine' ? ['tile','tile','stone'] : ['sign','glass','tileW']) : debrisList(A);
+    dropDebris(list, G.fx.to.x, G.fx.to.y, 9, .7, G.fx.t0, 0).forEach(m => { R.scene.add(m); fallRocks.push(m); });
   }
   if (!G.fx && fallRocks.length){ fallRocks.forEach(r => R.scene.remove(r)); fallRocks.length = 0; }
-  if (fallRocks.length && G.fx){ const t = (nowMs() - G.fx.t0)/1000; fallRocks.forEach(r => { const kk = clamp((t - r.userData.d)/.45, 0, 1); r.position.set(G.fx.to.x + r.userData.ox, 5 - 4.8*kk*kk, G.fx.to.y + r.userData.oz); r.rotation.x = t*4; }); }
+  if (fallRocks.length) animDebris(fallRocks, nowMs());
   // 津波：高台以外が水につかる
   tsunami3.visible = !!(A.tsunami && G.res && G.fx);
   if (tsunami3.visible){ const kk = clamp((nowMs() - G.fx.t0)/1600, 0, 1); tsunami3.position.set(COLS/2, -.1 + kk*.6, ROWS/2); }

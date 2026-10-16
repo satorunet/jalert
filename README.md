@@ -26,7 +26,7 @@
 index.html        3D 版（トップ。build-3d.py で 2D 版から自動生成するので直接編集しない）
 2d/index.html     2D 版（ゲームの中身の元。ここを直してから build-3d.py）
 3d/index.html     旧 3D 版の URL（トップへ転送）
-build3d/          3D 版の描画部品（r3d.js：3D 表示、transit3d.js：階段・エレベーターのシーン）
+build3d/          3D 版の描画部品（r3d.js：3D 表示、transit3d.js：階段・エスカレーター・エレベーター、debris3d.js：場所ごとの落下物）
 build-3d.py       3D 版を組み立てる（2D 版や build3d/ を直したら python3 build-3d.py）
 synth.js          警報音の試作（ブラウザ内合成）
 sound-lab.html    警報音ラボ（本物と試作音の聞き比べ）

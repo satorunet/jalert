@@ -66,7 +66,7 @@ button:active{transform:scale(.97)}
 .confirm .mute{background:#37474f}
 .confirm .back{background:transparent;color:var(--muted);font-weight:600}
 
-#stage{position:relative;width:min(100cqw,calc(100cqh * 640 / 416));aspect-ratio:640/416;background:#000;border-radius:12px;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.4)}
+#stage{position:relative;width:100%;height:100%;background:#000;border-radius:12px;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.4)}
 #cv,#gl{position:absolute;inset:0;width:100%!important;height:100%!important;display:block;touch-action:none}
 #gl{z-index:0}
 #cv{z-index:1}
@@ -1298,6 +1298,14 @@ function getArea(key){
 const $ = id => document.getElementById(id);
 const cv = $('cv'); let ctx = cv.getContext('2d');
 cv.width = COLS*T*DPR; cv.height = ROWS*T*DPR;
+// 画面の論理サイズ（ゲーム画面の形に合わせて変わる。マップは 20×13 マスのまま、カメラで映す）
+let SW = COLS*T, SH = ROWS*T;
+function resizeCanvas(){
+  const r = $('stage').getBoundingClientRect(); if (!r.width) return;
+  SW = r.width < 700 ? Math.round(Math.max(320, r.width)) : Math.round(r.width/1.25); SH = Math.round(SW * r.height / r.width);
+  cv.width = SW*DPR; cv.height = SH*DPR;
+}
+new ResizeObserver(resizeCanvas).observe($('stage')); resizeCanvas();
 const ov = $('ov'), banner = $('banner'), actBtn = $('actBtn'), msgEl = $('msg');
 
 const rand = (a,b) => a + Math.random()*(b-a);
@@ -2566,7 +2574,7 @@ function usePortal(pt){
   p.path = [];
   if (pt.kind === 'door'){ moveTo(dest); return; }
   p.transit = {kind:pt.kind, dest, until: nowMs() + (pt.dur || 1.5)*1000, dur:(pt.dur || 1.5)};
-  setMsg(pt.kind === 'elevator' ? '<b>エレベーターで移動中…</b>' : '<b>階段で移動中…</b>');
+  setMsg(pt.kind === 'elevator' ? '<b>エレベーターで移動中…</b>' : G.A.hStyle === 'escalator' ? '<b>エスカレーターで移動中…</b>' : '<b>階段で移動中…</b>');
   if (pt.kind === 'stairs') sfxStairs(pt.dur || 1.5);
   else if (AC) beep(880, AC.currentTime, 0.15, 'sine', 0.1);
 }
@@ -3591,23 +3599,35 @@ function drawStar(cx, cy, r){
   for (let i=0;i<10;i++){ const a = -Math.PI/2 + i*Math.PI/5, rr2 = i%2 ? r*.45 : r; ctx.lineTo(cx+Math.cos(a)*rr2, cy+Math.sin(a)*rr2); }
   ctx.closePath(); ctx.fill();
 }
+// ====== 2D のカメラ：自分を中心に拡大して追いかける（結果を見るときはマップ全体） ======
+const ZOOM2D = 1.8;
+const CAM2 = {x: COLS*T/2, y: ROWS*T/2, z: 1, area: null};
+function updateCam2D(p, st){
+  const MW = COLS*T, MH = ROWS*T;
+  const fit = Math.min(SW/MW, SH/MH);                                      // マップ全体が入る倍率
+  const cover = Math.max(SW/MW, SH/MH);                                    // 画面にすき間ができない倍率
+  const near = Math.max(cover, Math.min(SW/(12*T), SH/(7*T)));             // ふだん：横12マス・縦7マスくらい（すき間なし）
+  const zt = (performance.now() - (G.zoomT0 || -1e9))/1000;
+  let z = st === 'result' ? fit : near, snap = CAM2.area !== (G.A && G.A.key);
+  // ラウンド開始直後は、もっと寄ってから少し引く
+  if (zt < 1.6){ const k = clamp((zt - .7)/.9, 0, 1), e = 1 - Math.pow(1-k, 3); z = near*1.45 - (near*1.45 - z)*e; snap = true; }
+  CAM2.area = G.A && G.A.key;
+  CAM2.z = snap ? z : CAM2.z + (z - CAM2.z)*.08;
+  const zz = CAM2.z, tx = p ? p.x*T : MW/2, ty = p ? p.y*T : MH/2;
+  const cl = (v, half, full) => full <= half*2 ? full/2 : clamp(v, half, full - half);
+  const cx = cl(tx, SW/(2*zz), MW), cy = cl(ty, SH/(2*zz), MH);
+  if (snap){ CAM2.x = cx; CAM2.y = cy; } else { CAM2.x += (cx - CAM2.x)*.18; CAM2.y += (cy - CAM2.y)*.18; }
+  CAM2.x = cl(CAM2.x, SW/(2*zz), MW); CAM2.y = cl(CAM2.y, SH/(2*zz), MH);
+}
+function applyCam2D(){ ctx.translate(SW/2, SH/2); ctx.scale(CAM2.z, CAM2.z); ctx.translate(-CAM2.x, -CAM2.y); }
 function draw(now){
   ctx.setTransform(DPR,0,0,DPR,0,0);
-  ctx.fillStyle = '#000'; ctx.fillRect(0,0,COLS*T,ROWS*T);
+  ctx.fillStyle = '#000'; ctx.fillRect(0,0,SW,SH);
   if (!G.A){ drawTitleBg(now); return; }
   const A = G.A, p = G.p, st = G.state;
   ctx.save();
-  {
-    // 開始直後：自分を中心に拡大（0.7秒止めてから 0.9秒でズームアウト）
-    const zt = (performance.now() - (G.zoomT0 || -1e9))/1000;
-    if (zt < 1.6 && p && !p.transit){
-      const k = clamp((zt - 0.7)/0.9, 0, 1), e = 1 - Math.pow(1-k, 3);
-      const z = 2.6 - 1.6*e, W = COLS*T, H = ROWS*T;
-      let cx = p.x*T + (W/2 - p.x*T)*e, cy = p.y*T + (H/2 - p.y*T)*e;
-      cx = clamp(cx, W/(2*z), W - W/(2*z)); cy = clamp(cy, H/(2*z), H - H/(2*z));
-      ctx.translate(W/2, H/2); ctx.scale(z, z); ctx.translate(-cx, -cy);
-    }
-  }
+  updateCam2D(p, st);
+  applyCam2D();
   if (G.shakeAmt > 0) ctx.translate(rand(-1,1)*G.shakeAmt, rand(-1,1)*G.shakeAmt);
   for (let y=0;y<ROWS;y++) for (let x=0;x<COLS;x++) drawTile(A, A.grid[y][x], x, y);
   drawDecor(A);
@@ -3700,6 +3720,7 @@ function draw(now){
   }
   drawFx();
   ctx.restore();
+  ctx.save(); applyCam2D();
   // 津波：高台以外が浸水していく
   if (G.A.tsunami && G.res && G.fx){
     const k = clamp((nowMs() - G.fx.t0)/1600, 0, 1);
@@ -3712,36 +3733,13 @@ function draw(now){
     for (let x=0;x<=COLS*T;x+=16) ctx.lineTo(x, top*T + Math.sin(x/20 + nowMs()/200)*4);
     ctx.stroke(); ctx.lineWidth = 1;
   }
-  // 薄暗い屋内（倉庫など）
-  if (G.A && G.A.dim){
-    const g2 = ctx.createRadialGradient(COLS*T/2, ROWS*T/2, 80, COLS*T/2, ROWS*T/2, 420);
-    g2.addColorStop(0, 'rgba(10,12,20,0)'); g2.addColorStop(1, `rgba(10,12,20,${G.A.dim*2})`);
-    ctx.fillStyle = g2; ctx.fillRect(0,0,COLS*T,ROWS*T);
-  }
   // 夜：まわりが暗い
   if (G.scene && G.scene.night && p){
     const a = st === 'result' ? .35 : .9;
     const lx = p.x*T, ly = p.y*T;
     const g = ctx.createRadialGradient(lx, ly, T*1.2, lx, ly, T*3.8);
     g.addColorStop(0, 'rgba(4,6,20,0)'); g.addColorStop(1, `rgba(4,6,20,${a})`);
-    ctx.fillStyle = g; ctx.fillRect(0,0,COLS*T,ROWS*T);
-  }
-  // 移動中の表示
-  if (p && p.transit){
-    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0,0,COLS*T,ROWS*T);
-    const left = Math.max(0, (p.transit.until - nowMs())/1000);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(p.stuck ? (p.transit.kind === 'elevator' ? 'エレベーター緊急停止！' : '階段で揺れに遭遇！') : (p.transit.kind === 'elevator' ? 'エレベーターで移動中…' : '階段で移動中…'), COLS*T/2, ROWS*T/2 - 6);
-    if (!p.stuck){
-      ctx.font = '14px sans-serif'; ctx.fillText(`→ ${areaName(p.transit.dest.area)}　${left.toFixed(1)}秒`, COLS*T/2, ROWS*T/2 + 20);
-      ctx.fillStyle = '#ffca28'; ctx.fillRect(COLS*T/2-100, ROWS*T/2+32, 200*(1-left/p.transit.dur), 5);
-    }
-  }
-  if (st === 'alert' || st === 'shake'){
-    const a = (Math.sin(now/120)+1)/2 * (G.type === 'eq' ? .14 : .1);
-    const grd = ctx.createRadialGradient(COLS*T/2, ROWS*T/2, 120, COLS*T/2, ROWS*T/2, 420);
-    grd.addColorStop(0, 'rgba(255,0,0,0)'); grd.addColorStop(1, `rgba(255,0,0,${a*3})`);
-    ctx.fillStyle = grd; ctx.fillRect(0,0,COLS*T,ROWS*T);
+    ctx.fillStyle = g; ctx.fillRect(-COLS*T, -ROWS*T, COLS*T*3, ROWS*T*3);
   }
   if (st === 'pass' && !G.boomT){
     // 落ちてくるミサイル
@@ -3755,14 +3753,38 @@ function draw(now){
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, 5, 0, 7); ctx.fill();
   }
   if (G.boomT){
-    // 着弾の閃光と衝撃波
     const t = (nowMs() - G.boomT)/1000;
     const cx = G.A.indoor ? COLS*T/2 : G.mPt.x*T, cy = G.A.indoor ? -20 : G.mPt.y*T;
-    if (t < 0.8){ ctx.fillStyle = `rgba(255,250,235,${(1-t/0.8)*.95})`; ctx.fillRect(0,0,COLS*T,ROWS*T); }
-    if (t < 1.6){
-      ctx.strokeStyle = `rgba(255,200,120,${1-t/1.6})`; ctx.lineWidth = 10*(1-t/1.6)+2;
-      ctx.beginPath(); ctx.arc(cx, cy, 20 + t*500, 0, 7); ctx.stroke();
+    if (t < 1.6){ ctx.strokeStyle = `rgba(255,200,120,${1-t/1.6})`; ctx.lineWidth = 10*(1-t/1.6)+2; ctx.beginPath(); ctx.arc(cx, cy, 20 + t*500, 0, 7); ctx.stroke(); }
+  }
+  ctx.restore();
+  // 薄暗い屋内（倉庫など）
+  if (G.A && G.A.dim){
+    const g2 = ctx.createRadialGradient(SW/2, SH/2, 80, SW/2, SH/2, 420);
+    g2.addColorStop(0, 'rgba(10,12,20,0)'); g2.addColorStop(1, `rgba(10,12,20,${G.A.dim*2})`);
+    ctx.fillStyle = g2; ctx.fillRect(0,0,SW,SH);
+  }
+  // 移動中の表示
+  if (p && p.transit){
+    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0,0,SW,SH);
+    const left = Math.max(0, (p.transit.until - nowMs())/1000);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(p.stuck ? (p.transit.kind === 'elevator' ? 'エレベーター緊急停止！' : '階段で揺れに遭遇！') : (p.transit.kind === 'elevator' ? 'エレベーターで移動中…' : '階段で移動中…'), SW/2, SH/2 - 6);
+    if (!p.stuck){
+      ctx.font = '14px sans-serif'; ctx.fillText(`→ ${areaName(p.transit.dest.area)}　${left.toFixed(1)}秒`, SW/2, SH/2 + 20);
+      ctx.fillStyle = '#ffca28'; ctx.fillRect(SW/2-100, SH/2+32, 200*(1-left/p.transit.dur), 5);
     }
+  }
+  if (st === 'alert' || st === 'shake'){
+    const a = (Math.sin(now/120)+1)/2 * (G.type === 'eq' ? .14 : .1);
+    const grd = ctx.createRadialGradient(SW/2, SH/2, 120, SW/2, SH/2, 420);
+    grd.addColorStop(0, 'rgba(255,0,0,0)'); grd.addColorStop(1, `rgba(255,0,0,${a*3})`);
+    ctx.fillStyle = grd; ctx.fillRect(0,0,SW,SH);
+  }
+  if (G.boomT){
+    // 着弾の閃光（画面全体）
+    const t = (nowMs() - G.boomT)/1000;
+    if (t < 0.8){ ctx.fillStyle = `rgba(255,250,235,${(1-t/0.8)*.95})`; ctx.fillRect(0,0,SW,SH); }
   }
   drawLocation();
   drawVerdict();
@@ -4042,10 +4064,104 @@ function confirmJoin(){
   setAct('off');
 }
 
+// ====== 場所ごとの落下物・がれき ======
+// 崩落した場所のがれきや、頭上から落ちてくる物を、その場所らしい物にする
+const DEBRIS = {
+  home:['light','book','dish','frame'], bedroom:['light','book','frame','clock'], mansion:['light','frame','book','dish'], hotel:['light','frame','panel','tv'],
+  homeOut:['tile','tile','stone','glass'], beach:['tile','stone','glass'],
+  school3:['panel','tube','book','chalk'], school1:['panel','tube','shoe','glass'], schoolYard:['glass','stone','panel'], gym:['tube','panel','ball'],
+  office:['panel','tube','paper','monitor'], lobby:['chandelier','glass','panel'], evacBldg:['panel','tube'],
+  hospital:['panel','tube','bottle','paper'], theater:['speaker','tube','panel'],
+  town:['sign','glass','stone','tileW'], chika:['panel','glass','tube','sign'], station:['sign','panel','tube'], subway:['panel','sign','tube'],
+  train:['luggage','bag','strap'], airport:['panel','glass','luggage'],
+  super:['can','veg','bottle','pack'], konbini:['bottle','can','snack','pack'], mall2:['glass','panel','sign'], mall1:['glass','sign','veg'],
+  parking:['stone','glass'], ugParking:['stone','stone','panel'], warehouse:['box','box','pallet'], port:['crate','box','stone'],
+  library:['book','book','book','tube'], restaurant:['dish','glass','light','bottle'], museum:['frame','stone','glass'],
+  shrine:['tile','tile','stone','wood'], park:['branch','stone','leaf'], camp:['soil','stone','branch','soil'],
+  stadium:['panel','sign','stone'], sento:['tileW','basin','glass'], amusement:['sign','bulb','stone'],
+  livehouse:['speaker','tube','bottle'], nursery:['toy','toy','panel','crayon'], arcade:['sign','plush','panel'],
+};
+const DBG = {};
+function dGeo(k, make){ return DBG[k] || (DBG[k] = make()); }
+function mkDebris(type){
+  const r = Math.random;
+  const pick = a => a[Math.floor(r()*a.length)];
+  let m;
+  switch (type){
+    case 'panel': m = new THREE.Mesh(dGeo('panel', () => new THREE.BoxGeometry(.6, .03, .6)), m3(0xf2f2ee)); break;
+    case 'tube': m = new THREE.Mesh(dGeo('tube', () => new THREE.CylinderGeometry(.03, .03, 1.1, 8)), m3(0xffffff, {emissive:0xdddddd, emissiveIntensity:.4})); m.rotation.z = Math.PI/2; break;
+    case 'light': m = new THREE.Mesh(dGeo('light', () => new THREE.CylinderGeometry(.25, .3, .12, 14)), m3(0xfff8e1, {emissive:0xffe082, emissiveIntensity:.3})); break;
+    case 'chandelier': m = new THREE.Mesh(dGeo('chand', () => new THREE.OctahedronGeometry(.3)), m3(0xffe082, {metalness:.6, roughness:.3})); break;
+    case 'book': m = new THREE.Mesh(dGeo('book', () => new THREE.BoxGeometry(.22, .05, .3)), m3(pick([0xef5350, 0x42a5f5, 0x66bb6a, 0xffca28, 0xab47bc, 0x8d6e63]))); break;
+    case 'dish': m = new THREE.Mesh(dGeo('dish', () => new THREE.CylinderGeometry(.14, .1, .03, 14)), m3(0xfafafa)); break;
+    case 'frame': m = new THREE.Mesh(dGeo('frame', () => new THREE.BoxGeometry(.4, .03, .3)), m3(pick([0x8d6e63, 0xffd54f, 0x5d4037]))); break;
+    case 'clock': m = new THREE.Mesh(dGeo('clock', () => new THREE.CylinderGeometry(.14, .14, .04, 16)), m3(0xfafafa)); break;
+    case 'tv': m = new THREE.Mesh(dGeo('tv', () => new THREE.BoxGeometry(.5, .05, .3)), m3(0x212121)); break;
+    case 'tile': m = new THREE.Mesh(dGeo('tile', () => new THREE.CylinderGeometry(.16, .16, .3, 8, 1, false, 0, Math.PI)), m3(pick([0x37474f, 0x455a64, 0x3e2723]), {side: THREE.DoubleSide})); break;
+    case 'tileW': m = new THREE.Mesh(dGeo('tileW', () => new THREE.BoxGeometry(.18, .03, .18)), m3(pick([0xe0f2f1, 0xb2dfdb, 0xeceff1, 0xd7ccc8]))); break;
+    case 'stone': m = new THREE.Mesh(dGeo('stone' + Math.floor(r()*3), () => new THREE.DodecahedronGeometry(.13 + r()*.08)), m3(pick([0x8d8d8d, 0x7d7468, 0xa1958a]))); break;
+    case 'glass': m = new THREE.Mesh(dGeo('glass', () => new THREE.BoxGeometry(.3, .01, .2)), m3(0xb3e5fc, {transparent:true, opacity:.6, roughness:.05, metalness:.3})); break;
+    case 'sign': m = new THREE.Mesh(dGeo('sign', () => new THREE.BoxGeometry(.6, .05, .3)), m3(pick([0xe53935, 0xfdd835, 0x1e88e5, 0x43a047, 0xff7043]))); break;
+    case 'speaker': m = new THREE.Mesh(dGeo('spk', () => new THREE.BoxGeometry(.3, .4, .3)), m3(0x111111)); break;
+    case 'monitor': m = new THREE.Mesh(dGeo('mon', () => new THREE.BoxGeometry(.4, .03, .28)), m3(0x263238)); break;
+    case 'paper': m = new THREE.Mesh(dGeo('paper', () => new THREE.BoxGeometry(.2, .005, .28)), m3(0xffffff)); break;
+    case 'chalk': m = new THREE.Mesh(dGeo('chalk', () => new THREE.BoxGeometry(.06, .02, .02)), m3(pick([0xffffff, 0xffeb3b, 0xef9a9a]))); break;
+    case 'shoe': m = new THREE.Mesh(dGeo('shoe', () => new THREE.BoxGeometry(.1, .06, .22)), m3(pick([0xfafafa, 0x1e88e5]))); break;
+    case 'ball': m = new THREE.Mesh(dGeo('ball', () => new THREE.SphereGeometry(.13, 12, 10)), m3(0xff7043)); break;
+    case 'bottle': m = new THREE.Mesh(dGeo('bottle', () => new THREE.CylinderGeometry(.04, .05, .24, 8)), m3(pick([0x43a047, 0x8d6e63, 0x81d4fa, 0xfafafa]), {transparent:true, opacity:.85})); m.rotation.z = Math.PI/2; break;
+    case 'can': m = new THREE.Mesh(dGeo('can', () => new THREE.CylinderGeometry(.05, .05, .12, 10)), m3(pick([0xe53935, 0x1e88e5, 0xfdd835, 0x43a047, 0xbdbdbd]), {metalness:.5, roughness:.4})); break;
+    case 'veg': m = new THREE.Mesh(dGeo('veg', () => new THREE.SphereGeometry(.08, 10, 8)), m3(pick([0xe53935, 0xff9800, 0x7cb342, 0xfdd835, 0x8e24aa]))); break;
+    case 'pack': case 'snack': m = new THREE.Mesh(dGeo('pack', () => new THREE.BoxGeometry(.16, .05, .22)), m3(pick([0xff7043, 0xffca28, 0xec407a, 0x7e57c2, 0x26a69a]))); break;
+    case 'box': m = new THREE.Mesh(dGeo('box', () => new THREE.BoxGeometry(.45, .35, .4)), m3(pick([0xc8a165, 0xb88c4e, 0xd1ab70]))); break;
+    case 'pallet': m = new THREE.Mesh(dGeo('pallet', () => new THREE.BoxGeometry(.7, .08, .6)), m3(0x8d6e63)); break;
+    case 'crate': m = new THREE.Mesh(dGeo('crate', () => new THREE.BoxGeometry(.6, .06, .5)), m3(pick([0xc62828, 0x1565c0, 0x2e7d32, 0xef6c00]), {metalness:.4})); break;
+    case 'luggage': m = new THREE.Mesh(dGeo('lug', () => new THREE.BoxGeometry(.35, .22, .25)), m3(pick([0x37474f, 0x6d4c41, 0x1565c0, 0xc62828]))); break;
+    case 'bag': m = new THREE.Mesh(dGeo('bag', () => new THREE.BoxGeometry(.3, .15, .12)), m3(pick([0x212121, 0x8d6e63, 0xec407a]))); break;
+    case 'strap': m = new THREE.Mesh(dGeo('strap', () => new THREE.TorusGeometry(.07, .015, 6, 14)), m3(0xfff59d)); break;
+    case 'wood': m = new THREE.Mesh(dGeo('wood', () => new THREE.BoxGeometry(.6, .08, .1)), m3(0x6d4c41)); break;
+    case 'branch': m = new THREE.Mesh(dGeo('branch', () => new THREE.CylinderGeometry(.03, .05, .7, 6)), m3(0x6d4c41)); m.rotation.z = Math.PI/2.5; break;
+    case 'leaf': m = new THREE.Mesh(dGeo('leaf', () => new THREE.SphereGeometry(.16, 8, 6)), m3(0x558b2f)); break;
+    case 'soil': m = new THREE.Mesh(dGeo('soil', () => new THREE.SphereGeometry(.18, 7, 6)), m3(pick([0x795548, 0x6d4c41, 0x8d6e63]))); m.scale.y = .55; break;
+    case 'basin': m = new THREE.Mesh(dGeo('basin', () => new THREE.CylinderGeometry(.16, .11, .1, 14, 1, true)), m3(0xffca28, {side: THREE.DoubleSide})); break;
+    case 'bulb': m = new THREE.Mesh(dGeo('bulb', () => new THREE.SphereGeometry(.07, 8, 6)), m3(pick([0xffeb3b, 0xff4081, 0x00e5ff]), {emissive: 0x444444})); break;
+    case 'toy': m = new THREE.Mesh(dGeo('toy', () => new THREE.BoxGeometry(.12, .12, .12)), m3(pick([0xe53935, 0x1e88e5, 0xfdd835, 0x43a047]))); break;
+    case 'crayon': m = new THREE.Mesh(dGeo('crayon', () => new THREE.CylinderGeometry(.015, .015, .12, 6)), m3(pick([0xe53935, 0x1e88e5, 0xfdd835]))); m.rotation.z = Math.PI/2; break;
+    case 'plush': m = new THREE.Mesh(dGeo('plush', () => new THREE.SphereGeometry(.12, 10, 8)), m3(pick([0xffab91, 0xce93d8, 0xa5d6a7, 0xfff59d]))); break;
+    default: m = new THREE.Mesh(dGeo('stone0', () => new THREE.DodecahedronGeometry(.15)), m3(0x8d8d8d));
+  }
+  m.castShadow = true;
+  m.rotation.y = r()*Math.PI*2;
+  if (m.rotation.x === 0) m.rotation.x = (r()-.5)*.6;
+  return m;
+}
+function debrisList(A){ return DEBRIS[A.key] || ['stone', 'panel']; }
+// 天井・上空から落ちてきて、地面で止まる
+function dropDebris(list, x, z, n, spread, t0, delay){
+  const out = [];
+  for (let i = 0; i < n; i++){
+    const m = mkDebris(list[Math.floor(Math.random()*list.length)]);
+    const ty = .04 + Math.random()*.06;
+    m.userData = {x: x + (Math.random()-.5)*spread, z: z + (Math.random()-.5)*spread, ty, sy: 2.6 + Math.random()*1.5, d: (delay || 0) + Math.random()*.25, t0, spin: (Math.random()-.5)*8, rx: m.rotation.x};
+    m.position.set(m.userData.x, m.userData.sy, m.userData.z);
+    out.push(m);
+  }
+  return out;
+}
+function animDebris(list, now){
+  for (const m of list){
+    const u = m.userData, t = (now - u.t0)/1000 - u.d;
+    if (t < 0){ m.visible = false; continue; }
+    m.visible = true;
+    const k = Math.min(1, t/.45);
+    const bounce = k >= 1 ? Math.max(0, Math.sin((t - .45)*14)*Math.exp(-(t - .45)*8)*.12) : 0;
+    m.position.set(u.x, u.sy + (u.ty - u.sy)*k*k + bounce, u.z);
+    if (k < 1) m.rotation.x = u.rx + t*u.spin;
+  }
+}
+
 // =====================================================================
 // ====== 3D 表示（ゲームの中身は 2D 版と共通。描画だけを three.js に） ======
 // =====================================================================
-let SW = 640, SH = 416;   // 重ね表示（名札・吹き出しなど）の論理サイズ。画面の形に合わせて変わる
 const R3 = (() => {
   const stage = $('stage');
   const renderer = new THREE.WebGLRenderer({antialias:true});
@@ -4146,7 +4262,7 @@ function buildArea(A){
   const R = R3;
   if (W3.group) R.scene.remove(W3.group);
   const grp = new THREE.Group(); R.scene.add(grp);
-  Object.assign(W3, {key: A.key + ':' + (G.seed || 0), group: grp, furn: [], panes: [], lamps: [], swing: [], water: null, rubble: null, green: null, stars: [], torii: null, wheel: null});
+  Object.assign(W3, {key: A.key + ':' + (G.seed || 0), group: grp, furn: [], panes: [], lamps: [], swing: [], water: null, rubble: null, rubbleItems: null, green: null, stars: [], torii: null, wheel: null});
   const ground = paintArea(A, false), top = paintArea(A, true);
   const img = top.canvas.getContext('2d').getImageData(0, 0, top.canvas.width, top.canvas.height);
   const gm = new THREE.MeshStandardMaterial({map: ground.tex, roughness: .9});
@@ -4572,16 +4688,21 @@ function draw3D(now, dt){
   pGeo.setDrawRange(0, n); pGeo.attributes.position.needsUpdate = true; pGeo.attributes.color.needsUpdate = true;
   // がれき（崩落した場所）
   if (G.res && G.seed && !W3.rubble){
-    W3.rubble = new THREE.Group();
-    for (const q of hz(A).spots) for (let i = 0; i < 5; i++){ const r = bx(.25 + Math.random()*.2, .18 + Math.random()*.15, .25 + Math.random()*.2, m3(i % 2 ? 0x7d7468 : 0xa1958a)); r.position.set(q.x + (Math.random()-.5)*.6, .1, q.y + (Math.random()-.5)*.6); r.rotation.y = Math.random()*3; W3.rubble.add(r); }
+    // 崩落した場所：その場所らしい物が落ちてきて積もる
+    W3.rubble = new THREE.Group(); W3.rubbleItems = [];
+    const t0 = G.fx ? G.fx.t0 : nowMs();
+    for (const q of hz(A).spots){ const items = dropDebris(debrisList(A), q.x, q.y, 7, .8, t0, -.2); items.forEach(m => W3.rubble.add(m)); W3.rubbleItems.push(...items); }
     W3.group.add(W3.rubble);
   }
+  if (W3.rubbleItems) animDebris(W3.rubbleItems, nowMs());
   // 自分に落ちてくる物（看板・天井・がれき）
-  if (G.fx && !G.fx.alive && ['building','debris','blast'].includes(G.fx.cause) && !fallRocks.length){
-    for (let i = 0; i < 6; i++){ const r = bx(.3, .25, .3, m3(G.fx.cause === 'building' ? (i ? 0x9e9e9e : 0xffca28) : 0x8d8d8d)); r.userData = {ox:(Math.random()-.5)*.6, oz:(Math.random()-.5)*.6, d: i*.04}; R.scene.add(r); fallRocks.push(r); }
+  if (G.fx && !G.fx.alive && ['building','debris','blast','landslide','glass'].includes(G.fx.cause) && !fallRocks.length){
+    // 頭上から落ちてくる物も、その場所らしい物（外の建物なら看板・ガラス、土砂崩れなら土砂と岩）
+    const list = G.fx.cause === 'landslide' ? ['soil','soil','stone','branch'] : G.fx.cause === 'glass' ? ['glass','glass','glass'] : G.fx.cause === 'building' && !A.indoor ? (A.bStyle === 'house' || A.bStyle === 'shrine' ? ['tile','tile','stone'] : ['sign','glass','tileW']) : debrisList(A);
+    dropDebris(list, G.fx.to.x, G.fx.to.y, 9, .7, G.fx.t0, 0).forEach(m => { R.scene.add(m); fallRocks.push(m); });
   }
   if (!G.fx && fallRocks.length){ fallRocks.forEach(r => R.scene.remove(r)); fallRocks.length = 0; }
-  if (fallRocks.length && G.fx){ const t = (nowMs() - G.fx.t0)/1000; fallRocks.forEach(r => { const kk = clamp((t - r.userData.d)/.45, 0, 1); r.position.set(G.fx.to.x + r.userData.ox, 5 - 4.8*kk*kk, G.fx.to.y + r.userData.oz); r.rotation.x = t*4; }); }
+  if (fallRocks.length) animDebris(fallRocks, nowMs());
   // 津波：高台以外が水につかる
   tsunami3.visible = !!(A.tsunami && G.res && G.fx);
   if (tsunami3.visible){ const kk = clamp((nowMs() - G.fx.t0)/1600, 0, 1); tsunami3.position.set(COLS/2, -.1 + kk*.6, ROWS/2); }
@@ -4757,6 +4878,28 @@ function stairsPoint(t, dist){
   }
   return pts[pts.length-1].clone();
 }
+function buildEscalator(){
+  const g = new THREE.Group(); g.visible = false; R3.scene.add(g);
+  const RUNX = 6, RISE = 3.2, ang = Math.atan2(RISE, RUNX), L = Math.hypot(RUNX, RISE);
+  const metal = m3(0x9e9e9e, {metalness:.6, roughness:.35}), black = m3(0x212121, {roughness:.5});
+  const low = bx(3, .1, 2.6, m3(0xd6d1c8)); low.position.set(-1.5, -.05, 0); g.add(low);
+  const high = bx(3, .1, 2.6, m3(0xd6d1c8)); high.position.set(RUNX + 1.5, RISE - .05, 0); g.add(high);
+  const upperFloorEdge = bx(3, RISE, .2, m3(0xbdb8af)); upperFloorEdge.position.set(RUNX + 1.5, RISE/2, -1.4); g.add(upperFloorEdge);
+  // 踏み段（動く）
+  const steps = [];
+  for (let i = 0; i < 26; i++){ const st = bx(.38, .06, 1, metal); g.add(st); steps.push(st); }
+  const trussGeo = new THREE.BoxGeometry(L, .35, 1.25); const truss = new THREE.Mesh(trussGeo, m3(0x78909c)); truss.position.set(RUNX/2, RISE/2 - .25, 0); truss.rotation.z = ang; g.add(truss);
+  for (const z of [-.62, .62]){
+    const rail = bx(L + 1.2, .08, .1, black); rail.position.set(RUNX/2, RISE/2 + .95, z); rail.rotation.z = ang; g.add(rail);
+    const glass = new THREE.Mesh(new THREE.BoxGeometry(L + .6, .85, .03), m3(0xb3e5fc, {transparent:true, opacity:.3, roughness:.1}));
+    glass.position.set(RUNX/2, RISE/2 + .5, z); glass.rotation.z = ang; g.add(glass);
+  }
+  const lamp = new THREE.PointLight(0xffffff, .9, 10); g.add(lamp);
+  g.userData = {steps, RUNX, RISE, ang, L, lamp};
+  TR3.esc = g;
+  // 歩く道：下の床 → 乗り口 → 上の降り口 → 上の床
+  TR3.escPath = [new THREE.Vector3(-2.2, 0, 0), new THREE.Vector3(0, 0, 0), new THREE.Vector3(RUNX, RISE, 0), new THREE.Vector3(RUNX + 2.2, RISE, 0)];
+}
 function buildElev(){
   const g = new THREE.Group(); g.visible = false; R3.scene.add(g);
   const steel = m3(0xb0bec5, {metalness:.6, roughness:.35}), dark = m3(0x546e7a, {metalness:.5, roughness:.4});
@@ -4807,19 +4950,25 @@ function evPress(f){
   if (AC) beep(880, AC.currentTime, .12, 'sine', .15);
   buildEvPanel(true);
 }
+function leaveTransit(){
+  const p = G.p;
+  const tx = Math.floor(p.x), ty = Math.floor(p.y);
+  for (const [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0],[1,1],[-1,1],[1,-1],[-1,-1]]){
+    const x = tx + dx, y = ty + dy;
+    if (walk(x, y) && !G.A.portalAt[y*COLS + x]){ p.x = x + .5; p.y = y + .5; break; }
+  }
+  // 入るときに積んだ「戻り先」がこの場所なら取り除く
+  if (p.back && p.back.length && p.back[p.back.length-1].area === G.A.key) p.back.pop();
+  p.transit = null; p.lastTile = Math.floor(p.y)*COLS + Math.floor(p.x);
+  stopSteps();
+  setMsg(`<b>${G.A.name}</b>`);
+}
 function evOpen(){
   const p = G.p, tr = p && p.transit;
   if (!tr || tr.kind !== 'elevator' || tr.phase !== 'wait' || p.stuck) return;
   // 降りて、エレベーターの前に戻る
-  const tx = Math.floor(p.x), ty = Math.floor(p.y);
-  for (const [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0],[1,1],[-1,1]]){
-    const x = tx + dx, y = ty + dy;
-    if (walk(x, y) && !G.A.portalAt[y*COLS + x]){ p.x = x + .5; p.y = y + .5; break; }
-  }
-  if (p.back && p.back.length) p.back.pop();
-  p.transit = null; p.lastTile = Math.floor(p.y)*COLS + Math.floor(p.x);
+  leaveTransit();
   evPanel.style.display = 'none';
-  setMsg(`<b>${G.A.name}</b>`);
 }
 function buildEvPanel(lit){
   const tr = G.p.transit, f0 = floorOf(G.A.key), f1 = floorOf(tr.dest.area);
@@ -4838,26 +4987,51 @@ actBtn.addEventListener('pointerdown', () => { const tr = G.p && G.p.transit; if
 // 移動中は、いつもの場所の代わりにこのシーンを描く。描いたら true
 function drawTransit3D(now, dt){
   if (performance.now() > evMsgT) evMsg.style.display = 'none';
-  const p = G.p; if (!p || !p.transit) { if (TR3.stairs) TR3.stairs.visible = false; if (TR3.elev) TR3.elev.visible = false; evPanel.style.display = 'none'; evBuiltFor = null; return false; }
-  if (!TR3.stairs){ buildStairs(); buildElev(); }
+  const p = G.p; if (!p || !p.transit) { if (TR3.stairs) TR3.stairs.visible = false; if (TR3.elev) TR3.elev.visible = false; if (TR3.esc) TR3.esc.visible = false; evPanel.style.display = 'none'; evBuiltFor = null; return false; }
+  if (!TR3.stairs){ buildStairs(); buildElev(); buildEscalator(); }
   const R = R3, tr = p.transit;
   const f0 = floorOf(G.A.key), f1 = floorOf(tr.dest.area), down = f1 < f0;
   // 階段：スティック・移動キー・画面タッチで自分で降りる（上る）。1フロア＝折り返し1本
+  const esc = tr.kind === 'stairs' && G.A.hStyle === 'escalator';
+  tr.esc = esc;
   if (tr.kind === 'stairs'){
     if (tr.prog === undefined){ tr.prog = 0; tr.flights = Math.min(TR3.flightEnd.length, Math.max(1, Math.abs(f1 - f0))); }
     if (!p.stuck && tr.prog < 1){
+      // 入力の向きを、画面上で「行き先へ続く向き」と比べる：合っていれば進み、逆なら戻る
       const ix = (keys.right?1:0) - (keys.left?1:0), iy = (keys.down?1:0) - (keys.up?1:0);
-      const inp = Math.max(Math.hypot(ix, iy), Math.hypot(stick.x, stick.y), stairHold ? 1 : 0);
+      const vx = ix || stick.x, vy = iy || stick.y, vm = Math.hypot(vx, vy);
+      let fwd = 0;
+      if (stairHold) fwd = 1;
+      else if (vm > .2 && tr.lastPt && tr.lastAhead){
+        const a = proj(tr.lastPt.x, tr.lastPt.y + .5, tr.lastPt.z), b = proj(tr.lastAhead.x, tr.lastAhead.y + .5, tr.lastAhead.z);
+        if (a && b){ const sx = b.X - a.X, sy = b.Y - a.Y, sl = Math.hypot(sx, sy) || 1; fwd = (vx*sx + vy*sy)/sl/vm; }
+      }
+      const dir = fwd > .25 ? 1 : fwd < -.25 ? -1 : 0;
       if (p.stamina <= 0) p.tired = true;
       if (p.tired && p.stamina >= .5) p.tired = false;
-      const running = inp > .2 && (keys.run || btnRun) && !p.tired;
-      p.stamina = clamp(p.stamina + (running ? -dt/3.2 : inp > .2 ? dt/7 : dt/3.5), 0, 1);
-      if (inp > .2){
-        const len = TR3.flightEnd[tr.flights - 1];
-        tr.prog = Math.min(1, tr.prog + (running ? 6.5 : 4)*Math.min(1, inp)*dt/len);
-        tr.walkT = (tr.walkT || 0) + dt*(running ? 1.6 : 1);
+      const running = dir !== 0 && (keys.run || btnRun) && !p.tired;
+      p.stamina = clamp(p.stamina + (running ? -dt/3.2 : dt/4.5), 0, 1);
+      let sp, len;
+      if (esc){
+        // エスカレーター：踏み段の上だけ自動で運ばれる。床の上は自分で歩く。逆向きに歩けば戻れる
+        len = TR3.escPath.reduce((a, q, i) => i ? a + q.distanceTo(TR3.escPath[i-1]) : 0, 0);
+        const d = tr.prog * len, onBelt = d > 2.2 && d < len - 2.2;
+        sp = (onBelt ? 1.3 : 0) + dir*(running ? (onBelt ? 3.2 : 5) : (onBelt ? 1.8 : 3.2));
+        tr.onBelt = onBelt;
+        tr.walkT = (tr.walkT || 0) + dt*(dir ? (running ? 1.6 : 1) : 0);
+      } else {
+        // 階段：入力した向きに上り下りする（止まっていれば止まる）
+        len = TR3.flightEnd[tr.flights - 1];
+        sp = dir*(running ? 6.2 : 3.4);
+        tr.walkT = (tr.walkT || 0) + dt*(dir ? (running ? 1.6 : 1) : 0);
       }
+      tr.walkDir = dir;
+      tr.prog = Math.min(1, tr.prog + sp*dt/len);
       tr.running = running;
+      // 入口まで戻りきったら、元の階に戻る
+      tr.backHold = tr.prog <= 0 && dir < 0 ? (tr.backHold || 0) + dt : 0;
+      if (tr.backHold > .35){ tr.prog = 0; leaveTransit(); return drawTransit3D(now, dt); }
+      tr.prog = Math.max(0, tr.prog);
       // 2D 版の時間切れで勝手に着かないよう、着くまで待たせる
       tr.until = tr.prog >= 1 ? nowMs() - 1 : nowMs() + 60000;
       tr.dur = 60;
@@ -4881,7 +5055,7 @@ function drawTransit3D(now, dt){
   me.visible = true;
   const shaking = G.state === 'shake' || p.stuck;
   if (tr.kind === 'elevator'){
-    TR3.stairs.visible = false; const g = TR3.elev; g.visible = true;
+    TR3.stairs.visible = false; if (TR3.esc) TR3.esc.visible = false; const g = TR3.elev; g.visible = true;
     g.position.set(40, 0, 40);
     const u = g.userData;
     u.doorL.visible = u.doorR.visible = tr.phase !== 'wait';
@@ -4893,15 +5067,37 @@ function drawTransit3D(now, dt){
     poseChar3(me, {crouch: p.crouch, walk: 0, dead: false}, dt);
     // かごの中（扉の内側）から見る
     R.camera.position.set(g.position.x + .75, 2.15, 40.95); R.camera.lookAt(g.position.x - .1, .75, 39.75);
+  } else if (tr.esc){
+    TR3.elev.visible = false; TR3.stairs.visible = false; const g = TR3.esc; g.visible = true;
+    g.position.set(-40, 0, -40);
+    const u = g.userData;
+    // 踏み段を流す（止まると止まる）
+    if (!p.stuck) u.off = ((u.off || 0) + dt*1.3*(down ? -1 : 1) + 100) % .4;
+    u.steps.forEach((st, i) => { const d = (i*.4 + (u.off || 0)) % (u.L + .4) - .2; st.position.set(Math.cos(u.ang)*d, Math.sin(u.ang)*d + .02, 0); st.visible = d > -.1 && d < u.L + .1; });
+    const pts = TR3.escPath, total = pts.reduce((a, q, i) => i ? a + q.distanceTo(pts[i-1]) : 0, 0);
+    const dd = (down ? 1 - prog : prog) * total;
+    let rem = dd, pt = pts[0].clone();
+    for (let i = 1; i < pts.length; i++){ const seg = pts[i].distanceTo(pts[i-1]); if (rem <= seg){ pt = pts[i-1].clone().lerp(pts[i], rem/seg); break; } rem -= seg; pt = pts[i].clone(); }
+    pt.add(g.position);
+    me.position.copy(pt);
+    const ad = clamp(dd + (down ? -.2 : .2), 0, total); let rem2 = ad, ah = pts[0].clone();
+    for (let i = 1; i < pts.length; i++){ const seg = pts[i].distanceTo(pts[i-1]); if (rem2 <= seg){ ah = pts[i-1].clone().lerp(pts[i], rem2/seg); break; } rem2 -= seg; ah = pts[i].clone(); }
+    ah.add(g.position); tr.lastPt = pt.clone(); tr.lastAhead = ah;
+    me.rotation.y = (tr.walkDir || 1) > 0 === down ? -Math.PI/2 : Math.PI/2;
+    poseChar3(me, {crouch:false, walk: p.stuck ? 0 : (tr.walkT || 0), dead: !!p.stuck}, dt);
+    u.lamp.position.set(pt.x - g.position.x, pt.y + 3, 2);
+    if (shaking) g.position.x += (Math.random()-.5)*.1;
+    R.camera.position.set(pt.x + .4, pt.y + 2.6, pt.z + 6.4); R.camera.lookAt(pt.x + .3, pt.y + .4, pt.z);
   } else {
-    TR3.elev.visible = false; const g = TR3.stairs; g.visible = true;
+    TR3.elev.visible = false; if (TR3.esc) TR3.esc.visible = false; const g = TR3.stairs; g.visible = true;
     g.position.set(-40, 0, 40);
     const total = TR3.flightEnd[tr.flights - 1];
     const d = (down ? prog : 1 - prog) * total;
     const pt = stairsPoint(0, d).add(g.position);
     const ahead = stairsPoint(0, clamp(d + (down ? .15 : -.15), 0, total)).add(g.position);
     me.position.copy(pt);
-    if (ahead.distanceTo(pt) > 1e-4) me.rotation.y = Math.atan2(ahead.x - pt.x, ahead.z - pt.z);
+    tr.lastPt = pt.clone(); tr.lastAhead = ahead.clone();
+    if (ahead.distanceTo(pt) > 1e-4){ const back = (tr.walkDir || 1) < 0; me.rotation.y = Math.atan2(ahead.x - pt.x, ahead.z - pt.z) + (back ? Math.PI : 0); }
     // 揺れで転倒
     poseChar3(me, {crouch:false, walk: p.stuck ? 0 : (tr.walkT || 0), dead: !!p.stuck}, dt);
     g.userData.lamp.position.set(pt.x - g.position.x, pt.y - g.position.y + 2, 1);
@@ -4914,7 +5110,7 @@ function drawTransit3D(now, dt){
   ctx.textAlign = 'center';
   if (p.stuck){
     ctx.fillStyle = '#ff5252'; ctx.font = 'bold 22px sans-serif';
-    ctx.fillText(tr.kind === 'elevator' ? '⚠ 緊急停止' : '階段で揺れに遭遇！', SW/2, 48);
+    ctx.fillText(tr.kind === 'elevator' ? '⚠ 緊急停止' : tr.esc ? '⚠ エスカレーター緊急停止' : '階段で揺れに遭遇！', SW/2, 48);
     ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif';
     ctx.fillText(tr.kind === 'elevator' ? `${floorLabel(cur)} と ${floorLabel(cur + (down ? -1 : 1))} の間で止まりました` : 'バランスを崩して転落…', SW/2, 74);
   } else {
@@ -4927,13 +5123,13 @@ function drawTransit3D(now, dt){
     }
     if (tr.kind === 'elevator' && tr.phase === 'ride' && left < .05 && !tr.dinged){ tr.dinged = true; evDing(); }
     ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif';
-    ctx.fillText(`${tr.kind === 'elevator' ? 'エレベーター' : '階段'}　${floorLabel(f0)} → ${floorLabel(f1)}　${areaName(tr.dest.area)}`, SW/2, 76);
+    ctx.fillText(`${tr.kind === 'elevator' ? 'エレベーター' : tr.esc ? 'エスカレーター' : '階段'}　${floorLabel(f0)} → ${floorLabel(f1)}　${areaName(tr.dest.area)}`, SW/2, 76);
     ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.fillRect(SW/2 - 120, 88, 240, 5);
     ctx.fillStyle = '#ffca28'; ctx.fillRect(SW/2 - 120, 88, 240*prog, 5);
     if (tr.kind === 'stairs'){
       ctx.fillStyle = 'rgba(0,0,0,.6)'; rr(SW/2 - 170, SH - 46, 340, 30, 8); ctx.fill();
       ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif';
-      ctx.fillText(`スティック・矢印キー・画面タッチで階段を${down ? '降りる' : '上る'}（Bでダッシュ）`, SW/2, SH - 26);
+      ctx.fillText(tr.esc ? (tr.onBelt ? '自動で運ばれています（スティックで歩く・逆向きで戻る／Bでダッシュ）' : 'スティック・矢印キーで歩いて乗り降り（戻れば元の階へ）') : `スティック・矢印キーで自由に${down ? '降りる' : '上る'}・戻る（戻りきると元の階へ）／Bでダッシュ`, SW/2, SH - 26);
       if (p.stamina < 1){ ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(SW/2 - 60, SH - 58, 120, 6); ctx.fillStyle = p.tired ? '#ff3d00' : '#4fc3f7'; ctx.fillRect(SW/2 - 60, SH - 58, 120*p.stamina, 6); }
     }
   }

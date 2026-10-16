@@ -7,6 +7,7 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 s = open('2d/index.html', encoding='utf-8').read()
 r3 = open('build3d/r3d.js', encoding='utf-8').read()
 tr = open('build3d/transit3d.js', encoding='utf-8').read()
+db = open('build3d/debris3d.js', encoding='utf-8').read()
 
 def rep(a, b, cnt=1):
     global s
@@ -28,12 +29,13 @@ rep("#cv{width:100%;height:100%;display:block;touch-action:none}",
 rep("const cv = $('cv'), ctx = cv.getContext('2d');", "const cv = $('cv'); let ctx = cv.getContext('2d');")
 rep("  update(dt);\n  draw(t);", "  update(dt);\n  draw3D(t, dt);")
 rep("""  const r = cv.getBoundingClientRect();
-  const tx = Math.floor((e.clientX - r.left) / r.width * COLS);
-  const ty = Math.floor((e.clientY - r.top) / r.height * ROWS);""",
+  const sx = (e.clientX - r.left) / r.width * SW, sy = (e.clientY - r.top) / r.height * SH;
+  const tx = Math.floor(((sx - SW/2)/CAM2.z + CAM2.x)/T);
+  const ty = Math.floor(((sy - SH/2)/CAM2.z + CAM2.y)/T);""",
     """  const hit = tapToTile(e); if (!hit) return;
   const tx = hit.tx, ty = hit.ty;""")
 rep('<a id="dimBtn" href="../" title="3D版に切り替え">3D</a>', '<a id="dimBtn" href="2d/" title="2D版に切り替え">2D</a>')
-rep("// ====== ループ ======", r3 + "\n" + tr + "\n// ====== ループ ======")
+rep("// ====== ループ ======", db + "\n" + r3 + "\n" + tr + "\n// ====== ループ ======")
 s = re.sub(r'<script src="\.\./synth\.js\?v=([0-9a-f]*)"></script>',
            r'<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>\n<script src="synth.js?v=\1"></script>', s)
 # 画面座標を使う関数は、重ね表示の論理サイズ（SW×SH）で描く

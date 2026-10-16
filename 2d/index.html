@@ -66,7 +66,7 @@ button:active{transform:scale(.97)}
 .confirm .mute{background:#37474f}
 .confirm .back{background:transparent;color:var(--muted);font-weight:600}
 
-#stage{position:relative;width:min(100cqw,calc(100cqh * 640 / 416));aspect-ratio:640/416;background:#000;border-radius:12px;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.4)}
+#stage{position:relative;width:100%;height:100%;background:#000;border-radius:12px;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.4)}
 #cv{width:100%;height:100%;display:block;touch-action:none}
 
 #banner{flex:none;height:var(--banH);border-radius:10px;overflow:hidden;pointer-events:none;background:var(--panel);display:flex;flex-direction:column}
@@ -1292,6 +1292,14 @@ function getArea(key){
 const $ = id => document.getElementById(id);
 const cv = $('cv'), ctx = cv.getContext('2d');
 cv.width = COLS*T*DPR; cv.height = ROWS*T*DPR;
+// 画面の論理サイズ（ゲーム画面の形に合わせて変わる。マップは 20×13 マスのまま、カメラで映す）
+let SW = COLS*T, SH = ROWS*T;
+function resizeCanvas(){
+  const r = $('stage').getBoundingClientRect(); if (!r.width) return;
+  SW = r.width < 700 ? Math.round(Math.max(320, r.width)) : Math.round(r.width/1.25); SH = Math.round(SW * r.height / r.width);
+  cv.width = SW*DPR; cv.height = SH*DPR;
+}
+new ResizeObserver(resizeCanvas).observe($('stage')); resizeCanvas();
 const ov = $('ov'), banner = $('banner'), actBtn = $('actBtn'), msgEl = $('msg');
 
 const rand = (a,b) => a + Math.random()*(b-a);
@@ -2560,7 +2568,7 @@ function usePortal(pt){
   p.path = [];
   if (pt.kind === 'door'){ moveTo(dest); return; }
   p.transit = {kind:pt.kind, dest, until: nowMs() + (pt.dur || 1.5)*1000, dur:(pt.dur || 1.5)};
-  setMsg(pt.kind === 'elevator' ? '<b>エレベーターで移動中…</b>' : '<b>階段で移動中…</b>');
+  setMsg(pt.kind === 'elevator' ? '<b>エレベーターで移動中…</b>' : G.A.hStyle === 'escalator' ? '<b>エスカレーターで移動中…</b>' : '<b>階段で移動中…</b>');
   if (pt.kind === 'stairs') sfxStairs(pt.dur || 1.5);
   else if (AC) beep(880, AC.currentTime, 0.15, 'sine', 0.1);
 }
@@ -3585,23 +3593,35 @@ function drawStar(cx, cy, r){
   for (let i=0;i<10;i++){ const a = -Math.PI/2 + i*Math.PI/5, rr2 = i%2 ? r*.45 : r; ctx.lineTo(cx+Math.cos(a)*rr2, cy+Math.sin(a)*rr2); }
   ctx.closePath(); ctx.fill();
 }
+// ====== 2D のカメラ：自分を中心に拡大して追いかける（結果を見るときはマップ全体） ======
+const ZOOM2D = 1.8;
+const CAM2 = {x: COLS*T/2, y: ROWS*T/2, z: 1, area: null};
+function updateCam2D(p, st){
+  const MW = COLS*T, MH = ROWS*T;
+  const fit = Math.min(SW/MW, SH/MH);                                      // マップ全体が入る倍率
+  const cover = Math.max(SW/MW, SH/MH);                                    // 画面にすき間ができない倍率
+  const near = Math.max(cover, Math.min(SW/(12*T), SH/(7*T)));             // ふだん：横12マス・縦7マスくらい（すき間なし）
+  const zt = (performance.now() - (G.zoomT0 || -1e9))/1000;
+  let z = st === 'result' ? fit : near, snap = CAM2.area !== (G.A && G.A.key);
+  // ラウンド開始直後は、もっと寄ってから少し引く
+  if (zt < 1.6){ const k = clamp((zt - .7)/.9, 0, 1), e = 1 - Math.pow(1-k, 3); z = near*1.45 - (near*1.45 - z)*e; snap = true; }
+  CAM2.area = G.A && G.A.key;
+  CAM2.z = snap ? z : CAM2.z + (z - CAM2.z)*.08;
+  const zz = CAM2.z, tx = p ? p.x*T : MW/2, ty = p ? p.y*T : MH/2;
+  const cl = (v, half, full) => full <= half*2 ? full/2 : clamp(v, half, full - half);
+  const cx = cl(tx, SW/(2*zz), MW), cy = cl(ty, SH/(2*zz), MH);
+  if (snap){ CAM2.x = cx; CAM2.y = cy; } else { CAM2.x += (cx - CAM2.x)*.18; CAM2.y += (cy - CAM2.y)*.18; }
+  CAM2.x = cl(CAM2.x, SW/(2*zz), MW); CAM2.y = cl(CAM2.y, SH/(2*zz), MH);
+}
+function applyCam2D(){ ctx.translate(SW/2, SH/2); ctx.scale(CAM2.z, CAM2.z); ctx.translate(-CAM2.x, -CAM2.y); }
 function draw(now){
   ctx.setTransform(DPR,0,0,DPR,0,0);
-  ctx.fillStyle = '#000'; ctx.fillRect(0,0,COLS*T,ROWS*T);
+  ctx.fillStyle = '#000'; ctx.fillRect(0,0,SW,SH);
   if (!G.A){ drawTitleBg(now); return; }
   const A = G.A, p = G.p, st = G.state;
   ctx.save();
-  {
-    // 開始直後：自分を中心に拡大（0.7秒止めてから 0.9秒でズームアウト）
-    const zt = (performance.now() - (G.zoomT0 || -1e9))/1000;
-    if (zt < 1.6 && p && !p.transit){
-      const k = clamp((zt - 0.7)/0.9, 0, 1), e = 1 - Math.pow(1-k, 3);
-      const z = 2.6 - 1.6*e, W = COLS*T, H = ROWS*T;
-      let cx = p.x*T + (W/2 - p.x*T)*e, cy = p.y*T + (H/2 - p.y*T)*e;
-      cx = clamp(cx, W/(2*z), W - W/(2*z)); cy = clamp(cy, H/(2*z), H - H/(2*z));
-      ctx.translate(W/2, H/2); ctx.scale(z, z); ctx.translate(-cx, -cy);
-    }
-  }
+  updateCam2D(p, st);
+  applyCam2D();
   if (G.shakeAmt > 0) ctx.translate(rand(-1,1)*G.shakeAmt, rand(-1,1)*G.shakeAmt);
   for (let y=0;y<ROWS;y++) for (let x=0;x<COLS;x++) drawTile(A, A.grid[y][x], x, y);
   drawDecor(A);
@@ -3694,6 +3714,7 @@ function draw(now){
   }
   drawFx();
   ctx.restore();
+  ctx.save(); applyCam2D();
   // 津波：高台以外が浸水していく
   if (G.A.tsunami && G.res && G.fx){
     const k = clamp((nowMs() - G.fx.t0)/1600, 0, 1);
@@ -3706,36 +3727,13 @@ function draw(now){
     for (let x=0;x<=COLS*T;x+=16) ctx.lineTo(x, top*T + Math.sin(x/20 + nowMs()/200)*4);
     ctx.stroke(); ctx.lineWidth = 1;
   }
-  // 薄暗い屋内（倉庫など）
-  if (G.A && G.A.dim){
-    const g2 = ctx.createRadialGradient(COLS*T/2, ROWS*T/2, 80, COLS*T/2, ROWS*T/2, 420);
-    g2.addColorStop(0, 'rgba(10,12,20,0)'); g2.addColorStop(1, `rgba(10,12,20,${G.A.dim*2})`);
-    ctx.fillStyle = g2; ctx.fillRect(0,0,COLS*T,ROWS*T);
-  }
   // 夜：まわりが暗い
   if (G.scene && G.scene.night && p){
     const a = st === 'result' ? .35 : .9;
     const lx = p.x*T, ly = p.y*T;
     const g = ctx.createRadialGradient(lx, ly, T*1.2, lx, ly, T*3.8);
     g.addColorStop(0, 'rgba(4,6,20,0)'); g.addColorStop(1, `rgba(4,6,20,${a})`);
-    ctx.fillStyle = g; ctx.fillRect(0,0,COLS*T,ROWS*T);
-  }
-  // 移動中の表示
-  if (p && p.transit){
-    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0,0,COLS*T,ROWS*T);
-    const left = Math.max(0, (p.transit.until - nowMs())/1000);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(p.stuck ? (p.transit.kind === 'elevator' ? 'エレベーター緊急停止！' : '階段で揺れに遭遇！') : (p.transit.kind === 'elevator' ? 'エレベーターで移動中…' : '階段で移動中…'), COLS*T/2, ROWS*T/2 - 6);
-    if (!p.stuck){
-      ctx.font = '14px sans-serif'; ctx.fillText(`→ ${areaName(p.transit.dest.area)}　${left.toFixed(1)}秒`, COLS*T/2, ROWS*T/2 + 20);
-      ctx.fillStyle = '#ffca28'; ctx.fillRect(COLS*T/2-100, ROWS*T/2+32, 200*(1-left/p.transit.dur), 5);
-    }
-  }
-  if (st === 'alert' || st === 'shake'){
-    const a = (Math.sin(now/120)+1)/2 * (G.type === 'eq' ? .14 : .1);
-    const grd = ctx.createRadialGradient(COLS*T/2, ROWS*T/2, 120, COLS*T/2, ROWS*T/2, 420);
-    grd.addColorStop(0, 'rgba(255,0,0,0)'); grd.addColorStop(1, `rgba(255,0,0,${a*3})`);
-    ctx.fillStyle = grd; ctx.fillRect(0,0,COLS*T,ROWS*T);
+    ctx.fillStyle = g; ctx.fillRect(-COLS*T, -ROWS*T, COLS*T*3, ROWS*T*3);
   }
   if (st === 'pass' && !G.boomT){
     // 落ちてくるミサイル
@@ -3749,14 +3747,38 @@ function draw(now){
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, 5, 0, 7); ctx.fill();
   }
   if (G.boomT){
-    // 着弾の閃光と衝撃波
     const t = (nowMs() - G.boomT)/1000;
     const cx = G.A.indoor ? COLS*T/2 : G.mPt.x*T, cy = G.A.indoor ? -20 : G.mPt.y*T;
-    if (t < 0.8){ ctx.fillStyle = `rgba(255,250,235,${(1-t/0.8)*.95})`; ctx.fillRect(0,0,COLS*T,ROWS*T); }
-    if (t < 1.6){
-      ctx.strokeStyle = `rgba(255,200,120,${1-t/1.6})`; ctx.lineWidth = 10*(1-t/1.6)+2;
-      ctx.beginPath(); ctx.arc(cx, cy, 20 + t*500, 0, 7); ctx.stroke();
+    if (t < 1.6){ ctx.strokeStyle = `rgba(255,200,120,${1-t/1.6})`; ctx.lineWidth = 10*(1-t/1.6)+2; ctx.beginPath(); ctx.arc(cx, cy, 20 + t*500, 0, 7); ctx.stroke(); }
+  }
+  ctx.restore();
+  // 薄暗い屋内（倉庫など）
+  if (G.A && G.A.dim){
+    const g2 = ctx.createRadialGradient(SW/2, SH/2, 80, SW/2, SH/2, 420);
+    g2.addColorStop(0, 'rgba(10,12,20,0)'); g2.addColorStop(1, `rgba(10,12,20,${G.A.dim*2})`);
+    ctx.fillStyle = g2; ctx.fillRect(0,0,SW,SH);
+  }
+  // 移動中の表示
+  if (p && p.transit){
+    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0,0,SW,SH);
+    const left = Math.max(0, (p.transit.until - nowMs())/1000);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(p.stuck ? (p.transit.kind === 'elevator' ? 'エレベーター緊急停止！' : '階段で揺れに遭遇！') : (p.transit.kind === 'elevator' ? 'エレベーターで移動中…' : '階段で移動中…'), SW/2, SH/2 - 6);
+    if (!p.stuck){
+      ctx.font = '14px sans-serif'; ctx.fillText(`→ ${areaName(p.transit.dest.area)}　${left.toFixed(1)}秒`, SW/2, SH/2 + 20);
+      ctx.fillStyle = '#ffca28'; ctx.fillRect(SW/2-100, SH/2+32, 200*(1-left/p.transit.dur), 5);
     }
+  }
+  if (st === 'alert' || st === 'shake'){
+    const a = (Math.sin(now/120)+1)/2 * (G.type === 'eq' ? .14 : .1);
+    const grd = ctx.createRadialGradient(SW/2, SH/2, 120, SW/2, SH/2, 420);
+    grd.addColorStop(0, 'rgba(255,0,0,0)'); grd.addColorStop(1, `rgba(255,0,0,${a*3})`);
+    ctx.fillStyle = grd; ctx.fillRect(0,0,SW,SH);
+  }
+  if (G.boomT){
+    // 着弾の閃光（画面全体）
+    const t = (nowMs() - G.boomT)/1000;
+    if (t < 0.8){ ctx.fillStyle = `rgba(255,250,235,${(1-t/0.8)*.95})`; ctx.fillRect(0,0,SW,SH); }
   }
   drawLocation();
   drawVerdict();
@@ -3800,7 +3822,7 @@ function drawVerdict(){
   const t = (nowMs() - f.t0)/1000;
   if (t < 0.7) return;
   const a = clamp((t-0.7)/0.4, 0, 1);
-  const W = COLS*T, H = ROWS*T;
+  const W = SW, H = SH;
   ctx.fillStyle = f.alive ? `rgba(0,40,10,${.35*a})` : `rgba(70,0,0,${.5*a})`;
   ctx.fillRect(0,0,W,H);
   ctx.save();
@@ -3866,7 +3888,7 @@ function drawLocation(){
     ctx.textAlign = 'center';
     ctx.font = 'bold 26px sans-serif';
     const tw = ctx.measureText(name).width + 60;
-    const cx = COLS*T/2, cy = ROWS*T*0.22;
+    const cx = SW/2, cy = SH*0.22;
     ctx.fillStyle = 'rgba(0,0,0,.6)'; rr(cx - tw/2, cy - 26, tw, 52, 10); ctx.fill();
     ctx.fillStyle = kc; ctx.fillRect(cx - tw/2 + 12, cy + 17, tw - 24, 2);
     ctx.fillStyle = '#fff'; ctx.fillText(name, cx, cy - 2);
@@ -3876,7 +3898,7 @@ function drawLocation(){
   ctx.restore();
 }
 function drawTitleBg(now){
-  const W = COLS*T, H = ROWS*T;
+  const W = SW, H = SH;
   const g = ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#1c2a44'); g.addColorStop(1,'#0b0f17');
   ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
   ctx.fillStyle = '#263248';
@@ -3984,8 +4006,9 @@ actBtn.addEventListener('pointerdown', e => { e.preventDefault(); actPress(); })
 cv.addEventListener('pointerdown', e => {
   if (!(G.state === 'normal' || G.state === 'alert') || !G.p || G.p.transit) return;
   const r = cv.getBoundingClientRect();
-  const tx = Math.floor((e.clientX - r.left) / r.width * COLS);
-  const ty = Math.floor((e.clientY - r.top) / r.height * ROWS);
+  const sx = (e.clientX - r.left) / r.width * SW, sy = (e.clientY - r.top) / r.height * SH;
+  const tx = Math.floor(((sx - SW/2)/CAM2.z + CAM2.x)/T);
+  const ty = Math.floor(((sy - SH/2)/CAM2.z + CAM2.y)/T);
   const p = G.p;
   if (p.crouch) toggleCrouch();
   const path = bfs(Math.floor(p.x), Math.floor(p.y), tx, ty);
