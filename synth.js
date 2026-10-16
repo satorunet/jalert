@@ -38,15 +38,23 @@
 
   // ===== 緊急地震速報風 =====
   const EQ = {
-    A: { name: '鐘型チャイム', desc: '不協和の2和音を素早く交互に鳴らす、注意を引く金属的なチャイム。2回くり返す。',
+    A: { name: '本物に近いチャイム', desc: '実際の音の長さ・リズム・音域・音色に合わせた試作。1.5秒のフレーズ（速い上昇アルペジオ×2）を4回くり返す。旋律は著作物のため、音の並びは変えています。',
       play(AC, out){
         const r = room(AC, out), t0 = AC.currentTime + 0.05;
-        const p1 = [987.77, 1396.91], p2 = [1046.5, 1479.98];     // B5+F6 / C6+F#6（三全音）
-        for (let rep = 0; rep < 2; rep++) for (let i = 0; i < 12; i++){
-          const tt = t0 + rep*2.3 + i*0.135;
-          (i % 2 ? p2 : p1).forEach(f => bell(AC, r, f, tt, 0.9, 0.1));
+        // 実際の音：390→1320Hz あたりを5音で駆け上がるアルペジオを2つ、0.5秒ずらして。ここでは別の和音で同じ形にする
+        const arp1 = [370.0, 493.9, 622.3, 880.0, 1174.7];     // F#4 B4 D#5 A5 D6
+        const arp2 = [440.0, 587.3, 740.0, 1046.5, 1396.9];    // A4 D5 F#5 C6 F6
+        const note = (f, t, dur, vol) => {
+          tone(AC, r, f, t, dur, 'sine', vol, 0.004);
+          tone(AC, r, f*2, t, dur*0.6, 'sine', vol*0.32, 0.004);     // 2倍音（実際の音にもある）
+          tone(AC, r, f*3, t, dur*0.35, 'triangle', vol*0.12, 0.003);
+        };
+        for (let rep = 0; rep < 4; rep++){
+          const tp = t0 + rep*1.5;
+          arp1.forEach((f, i) => note(f, tp + i*0.1, 1.0, 0.11));
+          arp2.forEach((f, i) => note(f, tp + 0.5 + i*0.1, i === 4 ? 1.3 : 1.0, 0.12));
         }
-        return 4.7;
+        return 6.4;
       } },
     B: { name: '上昇アルペジオ', desc: '5音が駆け上がるフレーズを3回。最後の音を長く伸ばして緊張感を出す。',
       play(AC, out){
@@ -102,11 +110,29 @@
     return end - t0;
   }
   const MS = {
-    A: { name: 'うなりサイレン', desc: 'ゆっくり上がって伸び、下がる音に細かい「ふるえ」をのせた、国民保護サイレンに似た不気味な音。',
+    A: { name: '本物に近いサイレン', desc: '実際の国民保護サイレンを分析して合わせた試作。全音ほど離れた2つの音を同時に鳴らし、うなり合う不気味な響きのまま、約6.5秒かけてゆっくり上がり、3.5秒で下がる（計10秒）。',
       play(AC, out){
-        const t0 = AC.currentTime + 0.05, sw = [];
-        for (let i = 0; i < 3; i++) sw.push({from: 430, to: 760, dur: 1.6}, {from: 760, to: 790, dur: 1.2}, {from: 790, to: 420, dur: 1.5});
-        return sirenVoice(AC, out, t0, sw, {vol: 0.16, warble: 6.5, depth: 22, mult: [1, 1.335], type: 'sawtooth', lp: 2200});
+        const t0 = AC.currentTime + 0.05, END = 10;
+        const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1700; lp.Q.value = 0.3;
+        const g = AC.createGain();
+        g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(0.13, t0 + 0.25);
+        g.gain.setValueAtTime(0.13, t0 + END - 0.3); g.gain.linearRampToValueAtTime(0.0001, t0 + END);
+        lp.connect(g).connect(out);
+        // 低い方の音：265 → 370Hz（6.5秒）→ 300Hz（10秒）。高い方は約1.125倍（全音上）
+        [1, 1.125].forEach((m, k) => {
+          const o = AC.createOscillator(); o.type = 'square';
+          o.frequency.setValueAtTime(265*m, t0);
+          o.frequency.linearRampToValueAtTime(320*m, t0 + 2.5);
+          o.frequency.linearRampToValueAtTime(370*m, t0 + 6.6);
+          o.frequency.linearRampToValueAtTime(355*m, t0 + 7.6);
+          o.frequency.linearRampToValueAtTime(300*m, t0 + END);
+          // ごくわずかな揺らぎ（機械式サイレンらしさ）
+          const lfo = AC.createOscillator(), lg = AC.createGain(); lfo.frequency.value = 0.7 + k*0.23; lg.gain.value = 1.5;
+          lfo.connect(lg).connect(o.frequency); lfo.start(t0); lfo.stop(t0 + END + 0.1);
+          const og = AC.createGain(); og.gain.value = k ? 0.9 : 1;
+          o.connect(og).connect(lp); o.start(t0); o.stop(t0 + END + 0.1);
+        });
+        return END;
       } },
     B: { name: 'モーターサイレン', desc: '大きく上下にうなる、昔ながらの手回し・モーター式サイレンのような音。',
       play(AC, out){
