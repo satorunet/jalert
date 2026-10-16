@@ -10,7 +10,7 @@ function buildStairs(){
   const g = new THREE.Group(); g.visible = false; R3.scene.add(g);
   const stepM = m3(0x9e9e9e), railM = m3(0xfdd835), wallM = m3(0xcfd2d6), landM = m3(0xb0b4b9);
   const pts = [];
-  const RUN = .3, RISE = .18, N = 8, LANE = 1.3, FL = 6;
+  const RUN = .3, RISE = .18, N = 8, LANE = 1.3, FL = 16;
   for (let i = 0; i < FL; i++){
     const dir = i % 2 ? -1 : 1, z = i % 2 ? LANE : 0, y0 = -i*N*RISE;
     const x0 = dir > 0 ? 0 : N*RUN, x1 = dir > 0 ? N*RUN : 0;
@@ -26,11 +26,12 @@ function buildStairs(){
   const lamp = new THREE.PointLight(0xffffff, .9, 8); g.add(lamp); g.userData.lamp = lamp;
   TR3.stairs = g;
   TR3.path = pts;
-  let L = 0; for (let i = 1; i < pts.length; i++) L += pts[i].distanceTo(pts[i-1]);
+  let L = 0; TR3.flightEnd = [];
+  for (let i = 1; i < pts.length; i++){ L += pts[i].distanceTo(pts[i-1]); if (i % 4 === 3) TR3.flightEnd.push(L); }
   TR3.len = L;
 }
-function stairsPoint(t){
-  const pts = TR3.path; let d = t * TR3.len;
+function stairsPoint(t, dist){
+  const pts = TR3.path; let d = dist !== undefined ? dist : t * TR3.len;
   for (let i = 1; i < pts.length; i++){
     const seg = pts[i].distanceTo(pts[i-1]);
     if (d <= seg) return pts[i-1].clone().lerp(pts[i], d/seg);
@@ -54,13 +55,39 @@ function buildElev(){
   g.userData = {light, ceil, doorL, doorR};
   TR3.elev = g;
 }
+let stairHold = false;
+cv.addEventListener('pointerdown', () => { if (G.p && G.p.transit && G.p.transit.kind === 'stairs') stairHold = true; });
+addEventListener('pointerup', () => { stairHold = false; });
+addEventListener('pointercancel', () => { stairHold = false; });
 // 移動中は、いつもの場所の代わりにこのシーンを描く。描いたら true
 function drawTransit3D(now, dt){
   const p = G.p; if (!p || !p.transit) { if (TR3.stairs) TR3.stairs.visible = false; if (TR3.elev) TR3.elev.visible = false; return false; }
   if (!TR3.stairs){ buildStairs(); buildElev(); }
   const R = R3, tr = p.transit;
-  const left = Math.max(0, (tr.until - nowMs())/1000), prog = p.stuck ? (tr.stuckProg ?? (tr.stuckProg = 1 - left/tr.dur)) : clamp(1 - left/tr.dur, 0, 1);
   const f0 = floorOf(G.A.key), f1 = floorOf(tr.dest.area), down = f1 < f0;
+  // 階段：スティック・移動キー・画面タッチで自分で降りる（上る）。1フロア＝折り返し1本
+  if (tr.kind === 'stairs'){
+    if (tr.prog === undefined){ tr.prog = 0; tr.flights = Math.min(TR3.flightEnd.length, Math.max(1, Math.abs(f1 - f0))); }
+    if (!p.stuck && tr.prog < 1){
+      const ix = (keys.right?1:0) - (keys.left?1:0), iy = (keys.down?1:0) - (keys.up?1:0);
+      const inp = Math.max(Math.hypot(ix, iy), Math.hypot(stick.x, stick.y), stairHold ? 1 : 0);
+      if (p.stamina <= 0) p.tired = true;
+      if (p.tired && p.stamina >= .5) p.tired = false;
+      const running = inp > .2 && (keys.run || btnRun) && !p.tired;
+      p.stamina = clamp(p.stamina + (running ? -dt/3.2 : inp > .2 ? dt/7 : dt/3.5), 0, 1);
+      if (inp > .2){
+        const len = TR3.flightEnd[tr.flights - 1];
+        tr.prog = Math.min(1, tr.prog + (running ? 6.5 : 4)*Math.min(1, inp)*dt/len);
+        tr.walkT = (tr.walkT || 0) + dt*(running ? 1.6 : 1);
+      }
+      tr.running = running;
+      // 2D 版の時間切れで勝手に着かないよう、着くまで待たせる
+      tr.until = tr.prog >= 1 ? nowMs() - 1 : nowMs() + 60000;
+      tr.dur = 60;
+    }
+  }
+  const left = Math.max(0, (tr.until - nowMs())/1000);
+  const prog = tr.kind === 'stairs' ? tr.prog : (p.stuck ? (tr.stuckProg ?? (tr.stuckProg = 1 - left/tr.dur)) : clamp(1 - left/tr.dur, 0, 1));
   let cur = Math.round(f0 + (f1 - f0)*prog); if (cur === 0) cur = down ? -1 : 1;
   if (W3.group) W3.group.visible = false;
   for (const g of CH3.values()) g.visible = false;
@@ -84,13 +111,14 @@ function drawTransit3D(now, dt){
   } else {
     TR3.elev.visible = false; const g = TR3.stairs; g.visible = true;
     g.position.set(-40, 0, 40);
-    const t = down ? prog : 1 - prog;
-    const pt = stairsPoint(t).add(g.position);
-    const ahead = stairsPoint(Math.min(1, t + (down ? .01 : -.01))).add(g.position);
+    const total = TR3.flightEnd[tr.flights - 1];
+    const d = (down ? prog : 1 - prog) * total;
+    const pt = stairsPoint(0, d).add(g.position);
+    const ahead = stairsPoint(0, clamp(d + (down ? .15 : -.15), 0, total)).add(g.position);
     me.position.copy(pt);
     if (ahead.distanceTo(pt) > 1e-4) me.rotation.y = Math.atan2(ahead.x - pt.x, ahead.z - pt.z);
     // 揺れで転倒
-    poseChar3(me, {crouch:false, walk: p.stuck ? 0 : now/1000*1.6, dead: !!p.stuck}, dt);
+    poseChar3(me, {crouch:false, walk: p.stuck ? 0 : (tr.walkT || 0), dead: !!p.stuck}, dt);
     g.userData.lamp.position.set(pt.x - g.position.x, pt.y - g.position.y + 2, 1);
     if (shaking){ g.position.x += (Math.random()-.5)*.1; }
     R.camera.position.set(pt.x + 1.2, pt.y + 3.4, pt.z + 7.2); R.camera.lookAt(pt.x, pt.y + .3, pt.z + .6);
@@ -111,6 +139,12 @@ function drawTransit3D(now, dt){
     ctx.fillText(`${tr.kind === 'elevator' ? 'エレベーター' : '階段'}　${floorLabel(f0)} → ${floorLabel(f1)}　${areaName(tr.dest.area)}`, SW/2, 76);
     ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.fillRect(SW/2 - 120, 88, 240, 5);
     ctx.fillStyle = '#ffca28'; ctx.fillRect(SW/2 - 120, 88, 240*prog, 5);
+    if (tr.kind === 'stairs'){
+      ctx.fillStyle = 'rgba(0,0,0,.6)'; rr(SW/2 - 170, SH - 46, 340, 30, 8); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif';
+      ctx.fillText(`スティック・矢印キー・画面タッチで階段を${down ? '降りる' : '上る'}（Bでダッシュ）`, SW/2, SH - 26);
+      if (p.stamina < 1){ ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(SW/2 - 60, SH - 58, 120, 6); ctx.fillStyle = p.tired ? '#ff3d00' : '#4fc3f7'; ctx.fillRect(SW/2 - 60, SH - 58, 120*p.stamina, 6); }
+    }
   }
   if (G.state === 'alert' || G.state === 'shake'){
     const a = (Math.sin(now/120)+1)/2 * .14;

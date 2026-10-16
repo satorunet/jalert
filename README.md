@@ -3,7 +3,7 @@
 突然鳴り響く **緊急地震速報**・**ミサイル発射情報**。みんなで同時に避難して、生き残れるか？
 ラウンドごとに「生存」か「死亡」かが判定される、オンラインの防災トレーニングゲームです。
 
-▶ プレイ: https://alert.satoru.net （3D 版: https://alert.satoru.net/3d/ 、画面右上のボタンで切り替え）
+▶ プレイ: https://alert.satoru.net （3D 版。2D 版は https://alert.satoru.net/2d/ 、画面右上のボタンで切り替え）
 
 ![og](og.png)
 
@@ -23,8 +23,9 @@
 ## 構成
 
 ```
-index.html        ゲーム本体（2D 版）
-3d/index.html     3D 版（build-3d.py で 2D 版から自動生成。直接編集しない）
+index.html        3D 版（トップ。build-3d.py で 2D 版から自動生成するので直接編集しない）
+2d/index.html     2D 版（ゲームの中身の元。ここを直してから build-3d.py）
+3d/index.html     旧 3D 版の URL（トップへ転送）
 build3d/          3D 版の描画部品（r3d.js：3D 表示、transit3d.js：階段・エレベーターのシーン）
 build-3d.py       3D 版を組み立てる（2D 版や build3d/ を直したら python3 build-3d.py）
 synth.js          警報音の試作（ブラウザ内合成）
