@@ -313,7 +313,8 @@ table.rk tr.gap td{text-align:center;color:var(--muted);border:none}
       <div class="dh"><span>メニュー</span><button id="menuClose" aria-label="閉じる">✕</button></div>
       <button class="mi" id="miRank"><span class="ic">🏆</span>ランキング</button>
       <button class="mi" id="miSound"><span class="ic" id="miSoundIc">🔊</span>音<span class="v" id="miSoundV">ON</span></button>
-      <button class="mi" id="miAlertSound"><span class="ic">🚨</span>警報音<span class="v" id="miAlertSoundV">実際の音</span></button>
+      <button class="mi" id="miSoundEq"><span class="ic">🚨</span>地震の警報音<span class="v" id="miSoundEqV">試作A</span></button>
+      <button class="mi" id="miSoundMs"><span class="ic">🚀</span>ミサイルの警報音<span class="v" id="miSoundMsV">実際の音</span></button>
       <a class="mi" href="sound-lab.html" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><span class="ic">🎧</span>警報音を試聴する</a>
       <div class="rkh" style="margin-top:8px">あなたの成績</div>
       <div class="mystats" id="myStats"></div>
@@ -1388,10 +1389,11 @@ function playFile(k, out){
 // 緊急地震速報風チャイム（ゲーム用に作ったオリジナル音）
 // 警報音の種類：'file' = 実際の音（sounds/ に置いた音声。無ければ試作A）、'A'/'B'/'C' = 試作音（synth.js）
 const SOUND_MODES = ['file', 'A', 'B', 'C'];
-const soundMode = () => lsGet('alertSoundMode', 'file');
+// 地震は試作A、ミサイルは実際の音が標準
+const soundMode = kind => lsGet(kind === 'eq' ? 'alertSoundEq' : 'alertSoundMs', kind === 'eq' ? 'A' : 'file');
 function sfxEEW(){
   const b = newBus(); if (!b) return;
-  if (soundMode() === 'file'){
+  if (soundMode('eq') === 'file'){
     const fd = playFile('eq', b);
     if (fd){
       // 音声入りの録音（長め）ならそのまま、チャイムのみなら後に読み上げ
@@ -1399,14 +1401,14 @@ function sfxEEW(){
       return;
     }
   }
-  const v = soundMode() === 'file' ? 'A' : soundMode();
+  const v = soundMode('eq') === 'file' ? 'A' : soundMode('eq');
   const dur = window.AlertSynth ? AlertSynth.EQ[v].play(AC, b) : 3;
   later(dur*1000 + 200, () => speak('緊急地震速報。強い揺れに警戒してください。'));
   later(dur*1000 + 3700, () => speak('緊急地震速報。身の安全を確保してください。'));
 }
 function sfxSiren(){
   const b = newBus(); if (!b) return;
-  if (soundMode() === 'file'){
+  if (soundMode('ms') === 'file'){
     const fd = playFile('ms', b);
     if (fd){
       // 音声入りの録音（長め）ならそのまま、サイレンのみなら後に読み上げ
@@ -1414,7 +1416,7 @@ function sfxSiren(){
       return;
     }
   }
-  const v = soundMode() === 'file' ? 'A' : soundMode();
+  const v = soundMode('ms') === 'file' ? 'A' : soundMode('ms');
   const dur = window.AlertSynth ? AlertSynth.MS[v].play(AC, b) : 3;
   later(Math.min(dur, 4.5)*1000 + 200, () => speak('ミサイル発射。ミサイル発射。ミサイルが発射されたものとみられます。建物の中、または地下に避難してください。', 1.15));
 }
@@ -4013,19 +4015,24 @@ $('menuClose').onclick = closeMenu;
 $('miRank').onclick = () => { closeMenu(); showRanking(); };
 $('miSound').onclick = () => setMuted(!muted);
 const SOUND_LABEL = {file:'実際の音', A:'試作A', B:'試作B', C:'試作C'};
-function showSoundMode(){ $('miAlertSoundV').textContent = SOUND_LABEL[soundMode()] || '実際の音'; }
-$('miAlertSound').onclick = () => {
-  const m = SOUND_MODES[(SOUND_MODES.indexOf(soundMode()) + 1) % SOUND_MODES.length];
-  lsSet('alertSoundMode', m); showSoundMode();
+function showSoundMode(){
+  $('miSoundEqV').textContent = SOUND_LABEL[soundMode('eq')] || '試作A';
+  $('miSoundMsV').textContent = SOUND_LABEL[soundMode('ms')] || '実際の音';
+}
+function cycleSound(kind){
+  const m = SOUND_MODES[(SOUND_MODES.indexOf(soundMode(kind)) + 1) % SOUND_MODES.length];
+  lsSet(kind === 'eq' ? 'alertSoundEq' : 'alertSoundMs', m); showSoundMode();
   // 選んだ音を少しだけ試しに鳴らす
   initAudio();
   if (AC && G.state !== 'alert' && G.state !== 'shake'){
-    const b = newBus();
-    if (m === 'file'){ if (!playFile('eq', b)) AlertSynth.EQ.A.play(AC, b); }
-    else AlertSynth.EQ[m].play(AC, b);
+    const b = newBus(), set = kind === 'eq' ? AlertSynth.EQ : AlertSynth.MS;
+    if (m === 'file'){ if (!playFile(kind, b)) set.A.play(AC, b); }
+    else set[m].play(AC, b);
     setTimeout(() => { if (G.state !== 'alert' && G.state !== 'shake') stopBus(); }, 2500);
   }
-};
+}
+$('miSoundEq').onclick = () => cycleSound('eq');
+$('miSoundMs').onclick = () => cycleSound('ms');
 showSoundMode();
 
 // ====== プレイ前の確認 ======
