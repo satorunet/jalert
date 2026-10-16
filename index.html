@@ -5137,28 +5137,30 @@ function floorOf(key){
 }
 const floorLabel = f => f < 0 ? 'B' + (-f) : f + 'F';
 function buildStairs(){
+  // 乗り降りするだけのシンプルな階段：下の床 → まっすぐな階段1本 → 上の床
   const g = new THREE.Group(); g.visible = false; R3.scene.add(g);
-  const stepM = m3(0x9e9e9e), railM = m3(0xfdd835), wallM = m3(0xcfd2d6), landM = m3(0xb0b4b9);
-  const pts = [];
-  const RUN = .3, RISE = .18, N = 8, LANE = 1.3, FL = 16;
-  for (let i = 0; i < FL; i++){
-    const dir = i % 2 ? -1 : 1, z = i % 2 ? LANE : 0, y0 = -i*N*RISE;
-    const x0 = dir > 0 ? 0 : N*RUN, x1 = dir > 0 ? N*RUN : 0;
-    for (let s = 0; s < N; s++){
-      const st = bx(RUN, .12, 1.1, stepM); st.position.set(x0 + dir*(s + .5)*RUN, y0 - (s + 1)*RISE + .06, z); g.add(st);
-    }
-    const land = bx(1.2, .12, LANE + 1.1, landM); land.position.set(x1 + dir*.6, y0 - N*RISE + .06, LANE/2); g.add(land);
-    const rail = bx(N*RUN, .05, .05, railM); rail.position.set((x0 + x1)/2, y0 - N*RISE/2 + .9, z + (i % 2 ? .55 : -.55)); rail.rotation.z = -dir*Math.atan2(N*RISE, N*RUN); g.add(rail);
-    pts.push(new THREE.Vector3(x0 - dir*.3, y0, z), new THREE.Vector3(x1, y0 - N*RISE, z), new THREE.Vector3(x1 + dir*.6, y0 - N*RISE, z), new THREE.Vector3(x1 + dir*.6, y0 - N*RISE, i % 2 ? 0 : LANE));
+  const stepM = m3(0x9e9e9e), railM = m3(0xfdd835), wallM = m3(0xcfd2d6), floorM = m3(0xb0b4b9), noseM = m3(0xffca28);
+  const RUN = .32, RISE = .2, N = 14, W = 1.4, RUNX = N*RUN, H = N*RISE;
+  const low = bx(3, .1, 2.6, floorM); low.position.set(-1.5, -.05, 0); g.add(low);
+  const high = bx(3, .1, 2.6, floorM); high.position.set(RUNX + 1.5, H - .05, 0); g.add(high);
+  const edge = bx(3, H, .2, m3(0xbdb8af)); edge.position.set(RUNX + 1.5, H/2, -1.4); g.add(edge);
+  for (let s = 0; s < N; s++){
+    const y = (s + 1)*RISE;
+    const st = bx(RUN, y, W, stepM); st.position.set((s + .5)*RUN, y/2, 0); g.add(st);
+    const nose = bx(.04, .02, W, noseM); nose.position.set(s*RUN + .02, y + .01, 0); g.add(nose);   // 段鼻のすべり止め
   }
-  const back = bx(N*RUN + 3.4, FL*N*RISE + 4, .1, wallM); back.position.set(N*RUN/2, -FL*N*RISE/2 + 1, -.8); g.add(back);
-  for (let i = 0; i < FL; i += 2){ const sg = bx(.5, .3, .04, m3(0x2e7d32, {emissive:0x1b5e20, emissiveIntensity:.6})); sg.position.set(N*RUN/2, -i*N*RISE + 1.4, -.74); g.add(sg); }
-  const lamp = new THREE.PointLight(0xffffff, .9, 8); g.add(lamp); g.userData.lamp = lamp;
+  const ang = Math.atan2(H, RUNX), L = Math.hypot(RUNX, H);
+  for (const z of [-W/2 - .05, W/2 + .05]){
+    const rail = bx(L + .6, .05, .05, railM); rail.position.set(RUNX/2, H/2 + .9, z); rail.rotation.z = ang; g.add(rail);
+    for (const t of [0, .5, 1]){ const post = bx(.04, .9, .04, railM); post.position.set(RUNX*t, H*t + .45, z); g.add(post); }
+  }
+  const back = bx(RUNX + 6, H + 4, .1, wallM); back.position.set(RUNX/2, H/2 + 1, -1.5); g.add(back);
+  const sg = bx(.5, .3, .04, m3(0x2e7d32, {emissive:0x1b5e20, emissiveIntensity:.6})); sg.position.set(RUNX + 1.5, H + 1.6, -1.28); g.add(sg);
+  const lamp = new THREE.PointLight(0xffffff, .9, 9); g.add(lamp); g.userData.lamp = lamp;
   TR3.stairs = g;
-  TR3.path = pts;
-  let L = 0; TR3.flightEnd = [];
-  for (let i = 1; i < pts.length; i++){ L += pts[i].distanceTo(pts[i-1]); if (i % 4 === 3) TR3.flightEnd.push(L); }
-  TR3.len = L;
+  TR3.path = [new THREE.Vector3(-2.2, 0, 0), new THREE.Vector3(0, 0, 0), new THREE.Vector3(RUNX, H, 0), new THREE.Vector3(RUNX + 2.2, H, 0)];
+  let len = 0; for (let i = 1; i < TR3.path.length; i++) len += TR3.path[i].distanceTo(TR3.path[i-1]);
+  TR3.len = len; TR3.flightEnd = [len];
 }
 function stairsPoint(t, dist){
   const pts = TR3.path; let d = dist !== undefined ? dist : t * TR3.len;
@@ -5282,7 +5284,7 @@ function drawTransit3D(now, dt){
   if (!TR3.stairs){ buildStairs(); buildElev(); buildEscalator(); }
   const R = R3, tr = p.transit;
   const f0 = floorOf(G.A.key), f1 = floorOf(tr.dest.area), down = f1 < f0;
-  // 階段：スティック・移動キー・画面タッチで自分で降りる（上る）。1フロア＝折り返し1本
+  // 階段：スティック・移動キー・画面タッチで自分で降りる（上る）。何階分でも階段は1本
   const esc = tr.kind === 'stairs' && G.A.hStyle === 'escalator';
   tr.esc = esc;
   if (tr.kind === 'stairs'){
@@ -5400,17 +5402,17 @@ function drawTransit3D(now, dt){
     TR3.elev.visible = false; if (TR3.esc) TR3.esc.visible = false; const g = TR3.stairs; g.visible = true;
     g.position.set(-40, 0, 40);
     const total = TR3.flightEnd[tr.flights - 1];
-    const d = (down ? prog : 1 - prog) * total;
+    const d = (down ? 1 - prog : prog) * total;   // 道は下の床から上の床へ
     const pt = stairsPoint(0, d).add(g.position);
-    const ahead = stairsPoint(0, clamp(d + (down ? .15 : -.15), 0, total)).add(g.position);
+    const ahead = stairsPoint(0, clamp(d + (down ? -.15 : .15), 0, total)).add(g.position);
     me.position.copy(pt);
     tr.lastPt = pt.clone(); tr.lastAhead = ahead.clone();
     if (ahead.distanceTo(pt) > 1e-4){ const back = (tr.walkDir || 1) < 0; me.rotation.y = Math.atan2(ahead.x - pt.x, ahead.z - pt.z) + (back ? Math.PI : 0); }
     // 揺れで転倒
     poseChar3(me, {crouch:false, walk: p.stuck ? 0 : (tr.walkT || 0), dead: !!p.stuck}, dt);
-    g.userData.lamp.position.set(pt.x - g.position.x, pt.y - g.position.y + 2, 1);
+    g.userData.lamp.position.set(pt.x - g.position.x, pt.y - g.position.y + 3, 2);
     if (shaking){ g.position.x += (Math.random()-.5)*.1; }
-    R.camera.position.set(pt.x + 1.2, pt.y + 3.4, pt.z + 7.2); R.camera.lookAt(pt.x, pt.y + .3, pt.z + .6);
+    R.camera.position.set(pt.x + .4, pt.y + 3, pt.z + 7); R.camera.lookAt(pt.x + .3, pt.y + 1.2, pt.z);   // 上の表示に人が隠れないよう少し上を見る
   }
   R.renderer.render(R.scene, R.camera);
   // 重ね表示：階数・行き先・残り時間
