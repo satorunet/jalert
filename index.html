@@ -314,7 +314,7 @@ table.rk tr.gap td{text-align:center;color:var(--muted);border:none}
       <button class="mi" id="miRank"><span class="ic">🏆</span>ランキング</button>
       <button class="mi" id="miSound"><span class="ic" id="miSoundIc">🔊</span>音<span class="v" id="miSoundV">ON</span></button>
       <button class="mi" id="miSoundEq"><span class="ic">🚨</span>地震の警報音<span class="v" id="miSoundEqV">試作A</span></button>
-      <button class="mi" id="miSoundMs"><span class="ic">🚀</span>ミサイルの警報音<span class="v" id="miSoundMsV">実際の音</span></button>
+      <button class="mi" id="miSoundMs"><span class="ic">🚀</span>ミサイルの警報音<span class="v" id="miSoundMsV">試作A</span></button>
       <a class="mi" href="sound-lab.html" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><span class="ic">🎧</span>警報音を試聴する</a>
       <div class="rkh" style="margin-top:8px">あなたの成績</div>
       <div class="mystats" id="myStats"></div>
@@ -1389,8 +1389,8 @@ function playFile(k, out){
 // 緊急地震速報風チャイム（ゲーム用に作ったオリジナル音）
 // 警報音の種類：'file' = 実際の音（sounds/ に置いた音声。無ければ試作A）、'A'/'B'/'C' = 試作音（synth.js）
 const SOUND_MODES = ['file', 'A', 'B', 'C'];
-// 地震は試作A、ミサイルは実際の音が標準
-const soundMode = kind => lsGet(kind === 'eq' ? 'alertSoundEq' : 'alertSoundMs', kind === 'eq' ? 'A' : 'file');
+// 地震・ミサイルとも試作Aが標準
+const soundMode = kind => lsGet(kind === 'eq' ? 'alertSoundEq' : 'alertSoundMs', 'A');
 function sfxEEW(){
   const b = newBus(); if (!b) return;
   if (soundMode('eq') === 'file'){
@@ -4017,7 +4017,7 @@ $('miSound').onclick = () => setMuted(!muted);
 const SOUND_LABEL = {file:'実際の音', A:'試作A', B:'試作B', C:'試作C'};
 function showSoundMode(){
   $('miSoundEqV').textContent = SOUND_LABEL[soundMode('eq')] || '試作A';
-  $('miSoundMsV').textContent = SOUND_LABEL[soundMode('ms')] || '実際の音';
+  $('miSoundMsV').textContent = SOUND_LABEL[soundMode('ms')] || '試作A';
 }
 function cycleSound(kind){
   const m = SOUND_MODES[(SOUND_MODES.indexOf(soundMode(kind)) + 1) % SOUND_MODES.length];
