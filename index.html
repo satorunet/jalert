@@ -349,7 +349,7 @@ table.rk tr.gap td{text-align:center;color:var(--muted);border:none}
 
 </div>
 
-<script src="synth.js?v=785df45dbd"></script>
+<script src="synth.js?v=4c111548b3"></script>
 <script>
 (() => {
 'use strict';
@@ -1388,7 +1388,7 @@ function playFile(k, out){
 
 // 緊急地震速報風チャイム（ゲーム用に作ったオリジナル音）
 // 警報音の種類：'file' = 実際の音（sounds/ に置いた音声。無ければ試作A）、'A'/'B'/'C' = 試作音（synth.js）
-const SOUND_MODES = ['file', 'A', 'B', 'C'];
+const SOUND_MODES = {eq: ['file', 'A', 'B', 'C', 'D'], ms: ['file', 'A', 'B', 'C']};
 // 地震・ミサイルとも試作Aが標準
 const soundMode = kind => lsGet(kind === 'eq' ? 'alertSoundEq' : 'alertSoundMs', 'A');
 function sfxEEW(){
@@ -4014,13 +4014,14 @@ $('drawer').querySelector('.bg').onclick = closeMenu;
 $('menuClose').onclick = closeMenu;
 $('miRank').onclick = () => { closeMenu(); showRanking(); };
 $('miSound').onclick = () => setMuted(!muted);
-const SOUND_LABEL = {file:'実際の音', A:'試作A', B:'試作B', C:'試作C'};
+const SOUND_LABEL = {file:'実際の音', A:'試作A', B:'試作B', C:'試作C', D:'試作D'};
 function showSoundMode(){
   $('miSoundEqV').textContent = SOUND_LABEL[soundMode('eq')] || '試作A';
   $('miSoundMsV').textContent = SOUND_LABEL[soundMode('ms')] || '試作A';
 }
 function cycleSound(kind){
-  const m = SOUND_MODES[(SOUND_MODES.indexOf(soundMode(kind)) + 1) % SOUND_MODES.length];
+  const list = SOUND_MODES[kind];
+  const m = list[(list.indexOf(soundMode(kind)) + 1) % list.length];
   lsSet(kind === 'eq' ? 'alertSoundEq' : 'alertSoundMs', m); showSoundMode();
   // 選んだ音を少しだけ試しに鳴らす
   initAudio();

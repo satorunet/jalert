@@ -86,6 +86,23 @@
         }
         return 4.1;
       } },
+    D: { name: '和音型（似た響き）', desc: '試作Aと同じ「4度・3度・増4度を重ねた明るく不協和な和音」を、上にさっと鳴らしてから下へ返す形に。1.5秒のフレーズを4回。',
+      play(AC, out){
+        const r = room(AC, out), t0 = AC.currentTime + 0.05;
+        const ch1 = [370.0, 493.9, 622.3, 880.0, 1174.7];
+        const ch2 = [1396.9, 1046.5, 740.0, 587.3, 440.0];     // 2つ目は上から下へ
+        const note = (f, t, dur, vol) => {
+          bell(AC, r, f, t, dur, vol*0.55);
+          tone(AC, r, f, t, dur, 'sine', vol, 0.004);
+          tone(AC, r, f*2, t, dur*0.5, 'sine', vol*0.3, 0.004);
+        };
+        for (let rep = 0; rep < 4; rep++){
+          const tp = t0 + rep*1.5;
+          ch1.forEach((f, i) => note(f, tp + i*0.035, 1.1, 0.055));
+          ch2.forEach((f, i) => note(f, tp + 0.55 + i*0.06, 1.2, 0.055));
+        }
+        return 6.6;
+      } },
   };
 
   // ===== ミサイル発射情報（国民保護サイレン）風 =====
