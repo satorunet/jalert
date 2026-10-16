@@ -1453,7 +1453,9 @@ const TIPS = {
 
 // ====== ワールド：屋外のマップどうしを、端でシームレスにつなぐ ======
 // マップの端まで歩くと、となりのマップの同じ位置に出る（となりのマスが歩ける場所のときだけ）
-const WORLD = [
+// OPEN_WORLD = false：マップどうしはつなげず、1枚ずつのマップとして遊ぶ（true にすると下の配置でつながる）
+const OPEN_WORLD = false;
+const WORLD = !OPEN_WORLD ? [] : [
   ['camp',     'hillside',   'shrine',     'park',          'schoolYard'],
   ['homeOut',  'riverside',  'town',       'stationFront',  'amusement'],
   ['farmland', 'shoppingSt', 'officeDist', 'hospitalFront', 'stadium'],
