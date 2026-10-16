@@ -59,9 +59,68 @@ let stairHold = false;
 cv.addEventListener('pointerdown', () => { if (G.p && G.p.transit && G.p.transit.kind === 'stairs') stairHold = true; });
 addEventListener('pointerup', () => { stairHold = false; });
 addEventListener('pointercancel', () => { stairHold = false; });
+
+// ---- エレベーターのボタン（自分で押す） ----
+const evStyle = document.createElement('style');
+evStyle.textContent = `
+#evPanel{position:absolute;right:14px;top:50%;transform:translateY(-50%);z-index:4;display:none;background:linear-gradient(#37474f,#263238);border:2px solid #90a4ae;border-radius:12px;padding:10px;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+#evPanel .ttl{color:#cfd8dc;font-size:11px;font-weight:800;text-align:center;margin-bottom:6px}
+#evPanel .grid{display:grid;grid-template-columns:repeat(2,44px);gap:6px}
+#evPanel button{width:44px;height:44px;border-radius:50%;border:2px solid #b0bec5;background:#455a64;color:#fff;font:inherit;font-size:13px;font-weight:900;touch-action:manipulation}
+#evPanel button.dest{border-color:#ffca28}
+#evPanel button.lit{background:#ff8f00;box-shadow:0 0 12px #ffb300}
+#evPanel button.cur{opacity:.55}
+#evPanel .row{display:flex;gap:6px;justify-content:center;margin-top:8px}
+#evPanel .row button{width:44px;height:36px;border-radius:8px;font-size:12px}
+#evMsg{position:absolute;left:50%;bottom:62px;transform:translateX(-50%);z-index:4;display:none;background:rgba(0,0,0,.75);color:#fff;font-weight:800;font-size:14px;padding:8px 16px;border-radius:99px;white-space:nowrap}
+@media (max-width:560px){ #evPanel .grid{grid-template-columns:repeat(2,38px)} #evPanel button{width:38px;height:38px;font-size:12px} }`;
+document.head.appendChild(evStyle);
+const evPanel = document.createElement('div'); evPanel.id = 'evPanel'; $('stage').appendChild(evPanel);
+const evMsg = document.createElement('div'); evMsg.id = 'evMsg'; $('stage').appendChild(evMsg);
+let evMsgT = 0, evBuiltFor = null;
+function evSay(t){ evMsg.textContent = t; evMsg.style.display = 'block'; evMsgT = performance.now() + 1800; }
+function evDing(){ if (!AC) return; const t = AC.currentTime; beep(1318.5, t, .5, 'sine', .12); beep(1046.5, t + .25, .7, 'sine', .12); }
+function evPress(f){
+  const p = G.p, tr = p && p.transit;
+  if (!tr || tr.kind !== 'elevator' || tr.phase !== 'wait' || p.stuck) return;
+  const f1 = floorOf(tr.dest.area);
+  if (f !== f1){ evSay(f === floorOf(G.A.key) ? 'この階です' : `この階には止まりません（行き先は ${floorLabel(f1)}）`); return; }
+  tr.phase = 'ride'; tr.until = nowMs() + tr.rideDur*1000; tr.dur = tr.rideDur;
+  if (AC) beep(880, AC.currentTime, .12, 'sine', .15);
+  buildEvPanel(true);
+}
+function evOpen(){
+  const p = G.p, tr = p && p.transit;
+  if (!tr || tr.kind !== 'elevator' || tr.phase !== 'wait' || p.stuck) return;
+  // 降りて、エレベーターの前に戻る
+  const tx = Math.floor(p.x), ty = Math.floor(p.y);
+  for (const [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0],[1,1],[-1,1]]){
+    const x = tx + dx, y = ty + dy;
+    if (walk(x, y) && !G.A.portalAt[y*COLS + x]){ p.x = x + .5; p.y = y + .5; break; }
+  }
+  if (p.back && p.back.length) p.back.pop();
+  p.transit = null; p.lastTile = Math.floor(p.y)*COLS + Math.floor(p.x);
+  evPanel.style.display = 'none';
+  setMsg(`<b>${G.A.name}</b>`);
+}
+function buildEvPanel(lit){
+  const tr = G.p.transit, f0 = floorOf(G.A.key), f1 = floorOf(tr.dest.area);
+  const lo = Math.min(f0, f1), hi = Math.max(f0, f1), floors = [];
+  for (let f = hi; f >= lo; f--) if (f !== 0) floors.push(f);
+  evPanel.innerHTML = `<div class="ttl">行き先の階を押す</div><div class="grid">${floors.map(f => `<button data-f="${f}" class="${f === f1 ? 'dest' : ''} ${f === f0 ? 'cur' : ''} ${lit && f === f1 ? 'lit' : ''}">${floorLabel(f)}</button>`).join('')}</div><div class="row"><button data-o="1">◀▶<br>開</button><button>▶◀<br>閉</button></div>`;
+  evPanel.querySelectorAll('button[data-f]').forEach(b => b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); evPress(+b.dataset.f); }));
+  evPanel.querySelector('button[data-o]').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); evOpen(); });
+}
+addEventListener('keydown', e => {
+  const tr = G.p && G.p.transit;
+  if (!tr || tr.kind !== 'elevator' || tr.phase !== 'wait') return;
+  if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyE'){ e.preventDefault(); e.stopImmediatePropagation(); evPress(floorOf(tr.dest.area)); }
+}, true);
+actBtn.addEventListener('pointerdown', () => { const tr = G.p && G.p.transit; if (tr && tr.kind === 'elevator' && tr.phase === 'wait') evPress(floorOf(tr.dest.area)); }, true);
 // 移動中は、いつもの場所の代わりにこのシーンを描く。描いたら true
 function drawTransit3D(now, dt){
-  const p = G.p; if (!p || !p.transit) { if (TR3.stairs) TR3.stairs.visible = false; if (TR3.elev) TR3.elev.visible = false; return false; }
+  if (performance.now() > evMsgT) evMsg.style.display = 'none';
+  const p = G.p; if (!p || !p.transit) { if (TR3.stairs) TR3.stairs.visible = false; if (TR3.elev) TR3.elev.visible = false; evPanel.style.display = 'none'; evBuiltFor = null; return false; }
   if (!TR3.stairs){ buildStairs(); buildElev(); }
   const R = R3, tr = p.transit;
   const f0 = floorOf(G.A.key), f1 = floorOf(tr.dest.area), down = f1 < f0;
@@ -86,8 +145,14 @@ function drawTransit3D(now, dt){
       tr.dur = 60;
     }
   }
+  if (tr.kind === 'elevator'){
+    if (!tr.phase){ tr.phase = 'wait'; tr.rideDur = tr.dur; }
+    if (tr.phase === 'wait' && !p.stuck){ tr.until = nowMs() + 60000; tr.dur = 60; }
+    if (evBuiltFor !== tr){ evBuiltFor = tr; buildEvPanel(false); }
+    evPanel.style.display = p.stuck ? 'none' : 'block';
+  } else evPanel.style.display = 'none';
   const left = Math.max(0, (tr.until - nowMs())/1000);
-  const prog = tr.kind === 'stairs' ? tr.prog : (p.stuck ? (tr.stuckProg ?? (tr.stuckProg = 1 - left/tr.dur)) : clamp(1 - left/tr.dur, 0, 1));
+  const prog = tr.kind === 'stairs' ? tr.prog : tr.phase === 'wait' ? 0 : (p.stuck ? (tr.stuckProg ?? (tr.stuckProg = 1 - left/tr.dur)) : clamp(1 - left/tr.dur, 0, 1));
   let cur = Math.round(f0 + (f1 - f0)*prog); if (cur === 0) cur = down ? -1 : 1;
   if (W3.group) W3.group.visible = false;
   for (const g of CH3.values()) g.visible = false;
@@ -101,13 +166,15 @@ function drawTransit3D(now, dt){
     TR3.stairs.visible = false; const g = TR3.elev; g.visible = true;
     g.position.set(40, 0, 40);
     const u = g.userData;
+    u.doorL.visible = u.doorR.visible = tr.phase !== 'wait';
     const red = !!p.stuck;
     u.light.color.set(red ? 0xff2a2a : 0xffffff); u.light.intensity = red ? (.6 + Math.sin(now/90)*.4) : 1.1;
     u.ceil.material.emissive.set(red ? 0x550000 : 0xffffff);
     g.position.x += shaking ? (Math.random()-.5)*.08 : 0; g.position.y = shaking ? (Math.random()-.5)*.05 : Math.sin(now/300)*.005;
     me.position.set(g.position.x, g.position.y, 40); me.rotation.y = 0;
     poseChar3(me, {crouch: p.crouch, walk: 0, dead: false}, dt);
-    R.camera.position.set(40 + .2, 2.6, 43.4); R.camera.lookAt(40, 1, 40);
+    // かごの中（扉の内側）から見る
+    R.camera.position.set(g.position.x + .75, 2.15, 40.95); R.camera.lookAt(g.position.x - .1, .75, 39.75);
   } else {
     TR3.elev.visible = false; const g = TR3.stairs; g.visible = true;
     g.position.set(-40, 0, 40);
@@ -134,7 +201,13 @@ function drawTransit3D(now, dt){
     ctx.fillText(tr.kind === 'elevator' ? `${floorLabel(cur)} と ${floorLabel(cur + (down ? -1 : 1))} の間で止まりました` : 'バランスを崩して転落…', SW/2, 74);
   } else {
     ctx.fillStyle = '#ffca28'; ctx.font = 'bold 30px sans-serif';
-    ctx.fillText(`${down ? '▼' : '▲'} ${floorLabel(cur)}`, SW/2, 52);
+    ctx.fillText(tr.kind === 'elevator' && tr.phase === 'wait' ? floorLabel(f0) : `${down ? '▼' : '▲'} ${floorLabel(cur)}`, SW/2, 52);
+    if (tr.kind === 'elevator' && tr.phase === 'wait'){
+      ctx.fillStyle = 'rgba(0,0,0,.6)'; rr(SW/2 - 170, SH - 46, 340, 30, 8); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif';
+      ctx.fillText(`右のパネルで行き先（${floorLabel(f1)}）のボタンを押す　開：降りる`, SW/2, SH - 26);
+    }
+    if (tr.kind === 'elevator' && tr.phase === 'ride' && left < .05 && !tr.dinged){ tr.dinged = true; evDing(); }
     ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif';
     ctx.fillText(`${tr.kind === 'elevator' ? 'エレベーター' : '階段'}　${floorLabel(f0)} → ${floorLabel(f1)}　${areaName(tr.dest.area)}`, SW/2, 76);
     ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.fillRect(SW/2 - 120, 88, 240, 5);
