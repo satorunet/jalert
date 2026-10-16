@@ -4605,6 +4605,7 @@ function draw3D(now, dt){
   const wantKey = A.key + ':' + (G.seed || 0);
   if (W3.key !== wantKey) buildArea(A);
   if (drawTransit3D(now, dt)) return;
+  if (R.camera.fov !== 48){ R.camera.fov = 48; R.camera.updateProjectionMatrix(); }
   if (W3.group) W3.group.visible = true;
   pts3.visible = true;
   // ---- 明るさ（屋外・屋内・夜・薄暗い） ----
@@ -5000,13 +5001,18 @@ function drawTransit3D(now, dt){
       // 入力の向きを、画面上で「行き先へ続く向き」と比べる：合っていれば進み、逆なら戻る
       const ix = (keys.right?1:0) - (keys.left?1:0), iy = (keys.down?1:0) - (keys.up?1:0);
       const vx = ix || stick.x, vy = iy || stick.y, vm = Math.hypot(vx, vy);
-      let fwd = 0;
-      if (stairHold) fwd = 1;
-      else if (vm > .2 && tr.lastPt && tr.lastAhead){
-        const a = proj(tr.lastPt.x, tr.lastPt.y + .5, tr.lastPt.z), b = proj(tr.lastAhead.x, tr.lastAhead.y + .5, tr.lastAhead.z);
-        if (a && b){ const sx = b.X - a.X, sy = b.Y - a.Y, sl = Math.hypot(sx, sy) || 1; fwd = (vx*sx + vy*sy)/sl/vm; }
+      // ↓（下）＝降りる、↑（上）＝上る。折り返しで画面の向きが変わっても同じキーのまま進める
+      // ←→ はいま歩いている段の向きに合わせる
+      let dir = 0;
+      if (stairHold) dir = 1;
+      else if (vm > .2){
+        if (Math.abs(vy) >= Math.abs(vx)) dir = (vy > 0) === down ? 1 : -1;
+        else if (tr.lastPt && tr.lastAhead){
+          const a = proj(tr.lastPt.x, tr.lastPt.y + .5, tr.lastPt.z), b = proj(tr.lastAhead.x, tr.lastAhead.y + .5, tr.lastAhead.z);
+          if (a && b && Math.abs(b.X - a.X) > 2) dir = Math.sign(vx) === Math.sign(b.X - a.X) ? 1 : -1;
+          else dir = 1;
+        }
       }
-      const dir = fwd > .25 ? 1 : fwd < -.25 ? -1 : 0;
       if (p.stamina <= 0) p.tired = true;
       if (p.tired && p.stamina >= .5) p.tired = false;
       const running = dir !== 0 && (keys.run || btnRun) && !p.tired;
@@ -5063,10 +5069,22 @@ function drawTransit3D(now, dt){
     u.light.color.set(red ? 0xff2a2a : 0xffffff); u.light.intensity = red ? (.6 + Math.sin(now/90)*.4) : 1.1;
     u.ceil.material.emissive.set(red ? 0x550000 : 0xffffff);
     g.position.x += shaking ? (Math.random()-.5)*.08 : 0; g.position.y = shaking ? (Math.random()-.5)*.05 : Math.sin(now/300)*.005;
-    me.position.set(g.position.x, g.position.y, 40); me.rotation.y = 0;
-    poseChar3(me, {crouch: p.crouch, walk: 0, dead: false}, dt);
+    // かごの中は自由に歩ける（ボタンを押す前も後も）
+    if (tr.ex === undefined){ tr.ex = 0; tr.ez = .2; tr.face = Math.PI; }
+    let mvx = (keys.right?1:0) - (keys.left?1:0), mvz = (keys.down?1:0) - (keys.up?1:0);
+    if (!mvx && !mvz){ mvx = stick.x; mvz = stick.y; }
+    const ml = Math.hypot(mvx, mvz), moving = !p.stuck && ml > .2;
+    if (moving){
+      const sp = 1.6*dt*((keys.run || btnRun) ? 1.5 : 1)/Math.max(1, ml);
+      tr.ex = clamp(tr.ex + mvx*sp, -.78, .78); tr.ez = clamp(tr.ez + mvz*sp, -.78, .78);
+      tr.face = Math.atan2(mvx, mvz); tr.walkT = (tr.walkT || 0) + dt;
+    }
+    me.position.set(g.position.x + tr.ex, g.position.y, 40 + tr.ez);
+    me.rotation.y += ((tr.face - me.rotation.y + Math.PI*3) % (Math.PI*2) - Math.PI) * .25;
+    poseChar3(me, {crouch: p.crouch, walk: moving ? tr.walkT : 0, dead: false}, dt);
     // かごの中（扉の内側）から見る
-    R.camera.position.set(g.position.x + .75, 2.15, 40.95); R.camera.lookAt(g.position.x - .1, .75, 39.75);
+    if (R.camera.fov !== 74){ R.camera.fov = 74; R.camera.updateProjectionMatrix(); }   // かご全体が見えるよう広角に
+    R.camera.position.set(g.position.x + .8, 2.3, 41.02); R.camera.lookAt(g.position.x - .15, .55, 39.7);
   } else if (tr.esc){
     TR3.elev.visible = false; TR3.stairs.visible = false; const g = TR3.esc; g.visible = true;
     g.position.set(-40, 0, -40);
@@ -5129,7 +5147,7 @@ function drawTransit3D(now, dt){
     if (tr.kind === 'stairs'){
       ctx.fillStyle = 'rgba(0,0,0,.6)'; rr(SW/2 - 170, SH - 46, 340, 30, 8); ctx.fill();
       ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif';
-      ctx.fillText(tr.esc ? (tr.onBelt ? '自動で運ばれています（スティックで歩く・逆向きで戻る／Bでダッシュ）' : 'スティック・矢印キーで歩いて乗り降り（戻れば元の階へ）') : `スティック・矢印キーで自由に${down ? '降りる' : '上る'}・戻る（戻りきると元の階へ）／Bでダッシュ`, SW/2, SH - 26);
+      ctx.fillText(tr.esc ? (tr.onBelt ? `自動で運ばれています（${down ? '↓' : '↑'}で歩く・逆で戻る／Bでダッシュ）` : `${down ? '↓' : '↑'}で歩いて乗り降り（逆に戻れば元の階へ）`) : `${down ? '↓で降りる・↑で戻る' : '↑で上る・↓で戻る'}（戻りきると元の階へ）／Bでダッシュ`, SW/2, SH - 26);
       if (p.stamina < 1){ ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(SW/2 - 60, SH - 58, 120, 6); ctx.fillStyle = p.tired ? '#ff3d00' : '#4fc3f7'; ctx.fillRect(SW/2 - 60, SH - 58, 120*p.stamina, 6); }
     }
   }

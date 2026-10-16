@@ -444,6 +444,7 @@ function draw3D(now, dt){
   const wantKey = A.key + ':' + (G.seed || 0);
   if (W3.key !== wantKey) buildArea(A);
   if (drawTransit3D(now, dt)) return;
+  if (R.camera.fov !== 48){ R.camera.fov = 48; R.camera.updateProjectionMatrix(); }
   if (W3.group) W3.group.visible = true;
   pts3.visible = true;
   // ---- 明るさ（屋外・屋内・夜・薄暗い） ----
