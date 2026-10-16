@@ -1872,17 +1872,18 @@ function triggerAlert(){
 }
 function startShake(){
   G.state = 'shake'; G.p.path = [];
-  if (G.p.transit){ G.p.stuck = G.p.transit.kind; stopSteps(); }   // 階段・エレベーターの途中で揺れに遭う
+  // エレベーターは急停止。階段・エスカレーターは、段の上にいる（上った）ときだけバランスの判定（updateTransit）
+  if (G.p.transit && G.p.transit.kind === 'elevator'){ G.p.stuck = 'elevator'; stopSteps(); }
   $('bTtl').textContent = `震度${G.shindo}`;
   $('bSub').textContent = G.L >= 2 ? '大地震！ 動かずに身を守って！' : '強い揺れ！ 動かずに身を守って！';
   $('bTime').textContent = '揺れ';
   sfxRumble(G.R.post);
   if (navigator.vibrate) navigator.vibrate([200,60,300,60,250,60,400,60,300,60,500,60,400]);
-  setMsg(G.p.stuck === 'elevator' ? '<b>エレベーターが急停止！</b>' : G.p.stuck ? '<b>階段の途中で揺れが！</b>' : G.p.crouch ? '<b>そのまま身を守り続けて！</b>' : '<b>今すぐ身を守って！</b>');
+  setMsg(G.p.stuck === 'elevator' ? '<b>エレベーターが急停止！</b>' : G.p.transit ? '<b>揺れが！ 手すりにつかまって止まって！</b>' : G.p.crouch ? '<b>そのまま身を守り続けて！</b>' : '<b>今すぐ身を守って！</b>');
 }
 function missileEnd(){
   G.state = 'pass'; G.p.path = []; G.jetX = -2;
-  if (G.p.transit){ G.p.stuck = G.p.transit.kind; stopSteps(); }
+  if (G.p.transit && G.p.transit.kind === 'elevator'){ G.p.stuck = 'elevator'; stopSteps(); }
   $('bTtl').textContent = '続報';
   $('bSub').textContent = 'ミサイルが付近に落下（訓練）';
   $('bTime').textContent = '';
@@ -2477,6 +2478,8 @@ function outcome(A, x, y, crouch, stuck, type, L, pid, crushed){
   if (crushed){ grade = 'bad'; cause = 'crush'; msgs.push('人込みに巻き込まれ、押しつぶされました（圧死）。出口に殺到しない、人の流れに逆らわない。'); }
   else if (stuck === 'elevator' && type === 'eq'){ grade = 'bad'; cause = 'elevator'; msgs.push('エレベーターが緊急停止し、閉じ込められました。地震のときはエレベーターを使わない。'); }
   else if (stuck === 'stairs' && type === 'eq'){ grade = 'bad'; cause = 'stairs'; msgs.push('階段の途中で強い揺れに遭い、転落しました。揺れている間は移動しない。'); }
+  else if (stuck === 'stairsFloor' && type === 'eq'){ grade = 'good'; msgs.push('階段の手前の床の上で揺れをやりすごしました。揺れている間に段の上へ出なかったのは正解。'); }
+  else if (stuck === 'stairsOk' && type === 'eq'){ grade = 'good'; msgs.push('階段で揺れに遭いましたが、転ばずに耐えました。揺れている間は段の上で動かず、手すりにつかまって姿勢を低く。'); }
   else if (stuck === 'elevator'){ grade = 'bad'; cause = 'elevator'; msgs.push('着弾の停電でエレベーターが緊急停止し、閉じ込められました。避難にエレベーターは使わない。'); }
   else if (stuck){ grade = 'good'; msgs.push('階段で建物の中を移動中でした。窓のない場所で止まって伏せるとさらに安全。'); }
   else {
@@ -2512,7 +2515,7 @@ function outcome(A, x, y, crouch, stuck, type, L, pid, crushed){
 function impact(){
   const p = G.p, L = G.L;
   p.crushedFinal = !!(p.crushed || (!p.transit && pileUp(G.A.key, p.x, p.y, p)));
-  const o = outcome(G.A, p.x, p.y, p.crouch, p.stuck, G.type, L, NET.online ? NET.id : 0, p.crushedFinal);
+  const o = outcome(G.A, p.x, p.y, p.crouch, p.stuck || (p.transit ? (p.transit.balanced ? 'stairsOk' : 'stairsFloor') : null), G.type, L, NET.online ? NET.id : 0, p.crushedFinal);
   const mult = G.type === 'eq' ? 1 + L*0.35 : 1.2;
   const base = o.alive ? Math.round({perfect:100, good:50}[o.grade] * mult) : 0;
   const bonus = o.alive && p.crouch ? Math.round(G.crouchLeft * 8) : 0;
@@ -2903,6 +2906,213 @@ function closePhone(){
 function hidePhone(){ G.popup = false; $('phoneWrap').className = ''; }
 $('phOk').addEventListener('click', closePhone);
 
+// ====== 移動中（階段・エスカレーター・エレベーター）の動き。2D・3D で共通（見た目は draw / drawTransit3D） ======
+function floorOf(key){
+  const A = AREAS[key]; if (!A) return 1;
+  if (A.underground) return -1;
+  const m = /(\d+)階/.exec(areaName(key)); return m ? +m[1] : 1;
+}
+const floorLabel = f => f < 0 ? 'B' + (-f) : f + 'F';
+// 形（単位はタイル）：下の床 F → 斜めに RUNX 進んで H 上がる → 上の床 F。何階分でも1本
+const TRG = {stairs:{RUNX:4.48, H:2.8, F:2.2, N:14}, esc:{RUNX:6, H:3.2, F:2.2}};
+function transitPath(kind){ const g = TRG[kind]; return [[-g.F, 0], [0, 0], [g.RUNX, g.H], [g.RUNX + g.F, g.H]]; }
+function pathLen(pts){ let L = 0; for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]); return L; }
+function pathAt(pts, d){
+  for (let i = 1; i < pts.length; i++){
+    const a = pts[i-1], b = pts[i], seg = Math.hypot(b[0]-a[0], b[1]-a[1]);
+    if (d <= seg){ const t = seg ? d/seg : 0; return [a[0] + (b[0]-a[0])*t, a[1] + (b[1]-a[1])*t]; }
+    d -= seg;
+  }
+  return pts[pts.length-1].slice();
+}
+let stairHold = false;
+cv.addEventListener('pointerdown', () => { if (G.p && G.p.transit && G.p.transit.kind === 'stairs') stairHold = true; });
+addEventListener('pointerup', () => { stairHold = false; });
+addEventListener('pointercancel', () => { stairHold = false; });
+
+// ---- エレベーターのボタン（自分で押す） ----
+const evStyle = document.createElement('style');
+evStyle.textContent = `
+#evPanel{position:absolute;right:14px;top:50%;transform:translateY(-50%);z-index:4;display:none;background:linear-gradient(#37474f,#263238);border:2px solid #90a4ae;border-radius:12px;padding:10px;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+#evPanel .ttl{color:#cfd8dc;font-size:11px;font-weight:800;text-align:center;margin-bottom:6px}
+#evPanel .grid{display:grid;grid-template-columns:repeat(2,44px);gap:6px}
+#evPanel button{width:44px;height:44px;border-radius:50%;border:2px solid #b0bec5;background:#455a64;color:#fff;font:inherit;font-size:13px;font-weight:900;touch-action:manipulation}
+#evPanel button.dest{border-color:#ffca28}
+#evPanel button.lit{background:#ff8f00;box-shadow:0 0 12px #ffb300}
+#evPanel button.cur{opacity:.55}
+#evPanel .row{display:flex;gap:6px;justify-content:center;margin-top:8px}
+#evPanel .row button{width:44px;height:36px;border-radius:8px;font-size:12px}
+#evMsg{position:absolute;left:50%;bottom:62px;transform:translateX(-50%);z-index:4;display:none;background:rgba(0,0,0,.75);color:#fff;font-weight:800;font-size:14px;padding:8px 16px;border-radius:99px;white-space:nowrap}
+@media (max-width:560px){ #evPanel .grid{grid-template-columns:repeat(2,38px)} #evPanel button{width:38px;height:38px;font-size:12px} }`;
+document.head.appendChild(evStyle);
+const evPanel = document.createElement('div'); evPanel.id = 'evPanel'; $('stage').appendChild(evPanel);
+const evMsg = document.createElement('div'); evMsg.id = 'evMsg'; $('stage').appendChild(evMsg);
+let evMsgT = 0, evBuiltFor = null;
+function evSay(t){ evMsg.textContent = t; evMsg.style.display = 'block'; evMsgT = performance.now() + 1800; }
+function evDing(){ if (!AC) return; const t = AC.currentTime; beep(1318.5, t, .5, 'sine', .12); beep(1046.5, t + .25, .7, 'sine', .12); }
+function evPress(f){
+  const p = G.p, tr = p && p.transit;
+  if (!tr || tr.kind !== 'elevator' || tr.phase !== 'wait' || p.stuck) return;
+  const f1 = floorOf(tr.dest.area);
+  if (f !== f1){ evSay(f === floorOf(G.A.key) ? 'この階です' : `この階には止まりません（行き先は ${floorLabel(f1)}）`); return; }
+  tr.phase = 'ride'; tr.until = nowMs() + tr.rideDur*1000; tr.dur = tr.rideDur;
+  if (AC) beep(880, AC.currentTime, .12, 'sine', .15);
+  buildEvPanel(true);
+}
+function leaveTransit(){
+  const p = G.p;
+  const tx = Math.floor(p.x), ty = Math.floor(p.y);
+  for (const [dx, dy] of [[0,1],[0,-1],[1,0],[-1,0],[1,1],[-1,1],[1,-1],[-1,-1]]){
+    const x = tx + dx, y = ty + dy;
+    if (walk(x, y) && !G.A.portalAt[y*COLS + x]){ p.x = x + .5; p.y = y + .5; break; }
+  }
+  // 入るときに積んだ「戻り先」がこの場所なら取り除く
+  if (p.back && p.back.length && p.back[p.back.length-1].area === G.A.key) p.back.pop();
+  p.transit = null; p.lastTile = Math.floor(p.y)*COLS + Math.floor(p.x);
+  stopSteps();
+  setMsg(`<b>${G.A.name}</b>`);
+}
+function evOpen(){
+  const p = G.p, tr = p && p.transit;
+  if (!tr || tr.kind !== 'elevator' || tr.phase !== 'wait' || p.stuck) return;
+  leaveTransit();   // 降りて、エレベーターの前に戻る
+  evPanel.style.display = 'none';
+}
+function buildEvPanel(lit){
+  const tr = G.p.transit, f0 = floorOf(G.A.key), f1 = floorOf(tr.dest.area);
+  const lo = Math.min(f0, f1), hi = Math.max(f0, f1), floors = [];
+  for (let f = hi; f >= lo; f--) if (f !== 0) floors.push(f);
+  evPanel.innerHTML = `<div class="ttl">行き先の階を押す</div><div class="grid">${floors.map(f => `<button data-f="${f}" class="${f === f1 ? 'dest' : ''} ${f === f0 ? 'cur' : ''} ${lit && f === f1 ? 'lit' : ''}">${floorLabel(f)}</button>`).join('')}</div><div class="row"><button data-o="1">◀▶<br>開</button><button>▶◀<br>閉</button></div>`;
+  evPanel.querySelectorAll('button[data-f]').forEach(b => b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); evPress(+b.dataset.f); }));
+  evPanel.querySelector('button[data-o]').addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); evOpen(); });
+}
+addEventListener('keydown', e => {
+  const tr = G.p && G.p.transit;
+  if (!tr || tr.kind !== 'elevator' || tr.phase !== 'wait') return;
+  if (e.code === 'Space' || e.code === 'Enter' || e.code === 'KeyE'){ e.preventDefault(); e.stopImmediatePropagation(); evPress(floorOf(tr.dest.area)); }
+}, true);
+$('actBtn').addEventListener('pointerdown', () => { const tr = G.p && G.p.transit; if (tr && tr.kind === 'elevator' && tr.phase === 'wait') evPress(floorOf(tr.dest.area)); }, true);
+
+// 毎フレーム：階段・エスカレーターは自分で歩いて進む。エレベーターはかごの中を歩けて、ボタンを押すと動く
+// tr.fwdX：画面で「行き先へ進む向き」が右なら +1、左なら -1（描く側が決める）
+function updateTransit(dt){
+  if (performance.now() > evMsgT) evMsg.style.display = 'none';
+  const p = G.p, tr = p && p.transit;
+  if (!tr){ evPanel.style.display = 'none'; evBuiltFor = null; return; }
+  const f0 = floorOf(G.A.key), f1 = floorOf(tr.dest.area), down = f1 < f0;
+  const ix = (keys.right?1:0) - (keys.left?1:0), iy = (keys.down?1:0) - (keys.up?1:0);
+  const vx = ix || stick.x, vy = iy || stick.y, vm = Math.hypot(vx, vy);
+  if (tr.kind === 'stairs'){
+    evPanel.style.display = 'none';
+    const esc = tr.esc = G.A.hStyle === 'escalator';
+    if (tr.prog === undefined) tr.prog = 0;
+    if (p.stuck || tr.prog >= 1) return;
+    // ↓（下）＝降りる、↑（上）＝上る。←→ は画面で進む向きに合わせる。画面を押し続けても進む
+    let dir = 0;
+    if (stairHold) dir = 1;
+    else if (vm > .2){
+      if (Math.abs(vy) >= Math.abs(vx)) dir = (vy > 0) === down ? 1 : -1;
+      else dir = Math.sign(vx) === (tr.fwdX || 1) ? 1 : -1;
+    }
+    if (p.stamina <= 0) p.tired = true;
+    if (p.tired && p.stamina >= .5) p.tired = false;
+    const running = dir !== 0 && (keys.run || btnRun) && !p.tired;
+    p.stamina = clamp(p.stamina + (running ? -dt/3.2 : dt/4.5), 0, 1);
+    // 揺れの最中に段の上にいたら（上ったら）、1回だけバランスを崩すかの判定。床の上なら何もない
+    const g0 = TRG[esc ? 'esc' : 'stairs'], len0 = pathLen(transitPath(esc ? 'esc' : 'stairs'));
+    const dOn = (down ? 1 - tr.prog : tr.prog) * len0, onSteps = dOn > g0.F + .05 && dOn < len0 - g0.F - .05;
+    if (G.state === 'shake' && onSteps && !tr.balanced && !G.res){
+      tr.balanced = true;
+      const fall = Math.min(.9, (.2 + .15*G.L) * (running ? 1.5 : dir ? 1 : .5));
+      if (Math.random() < fall){ p.stuck = 'stairs'; stopSteps(); setMsg(esc ? '<b>エスカレーターが急停止！ バランスを崩した…</b>' : '<b>バランスを崩して転落…</b>'); return; }
+      setMsg('<b>手すりにつかまって耐えた！</b>');
+    }
+    const stopped = G.state === 'shake';   // 揺れるとエスカレーターは止まる
+    let sp, len;
+    if (esc){
+      // エスカレーター：踏み段の上だけ自動で運ばれる。床の上は自分で歩く。逆向きに歩けば戻れる
+      const g = TRG.esc; len = pathLen(transitPath('esc'));
+      const d = tr.prog * len, onBelt = d > g.F && d < len - g.F;
+      sp = (onBelt && !stopped ? 1.3 : 0) + dir*(running ? (onBelt ? 3.2 : 5) : (onBelt ? 1.8 : 3.2));
+      tr.onBelt = onBelt;
+    } else {
+      len = pathLen(transitPath('stairs'));
+      sp = dir*(running ? 6.2 : 3.4);
+    }
+    tr.walkT = (tr.walkT || 0) + dt*(dir ? (running ? 1.6 : 1) : 0);
+    tr.walkDir = dir; tr.running = running;
+    tr.prog = Math.min(1, tr.prog + sp*dt/len);
+    // 入口まで戻りきったら、元の階に戻る
+    tr.backHold = tr.prog <= 0 && dir < 0 ? (tr.backHold || 0) + dt : 0;
+    if (tr.backHold > .35){ tr.prog = 0; leaveTransit(); return; }
+    tr.prog = Math.max(0, tr.prog);
+    // 着くまで時間切れにしない
+    tr.until = tr.prog >= 1 ? nowMs() - 1 : nowMs() + 60000;
+    tr.dur = 60;
+  } else if (tr.kind === 'elevator'){
+    if (!tr.phase){ tr.phase = 'wait'; tr.rideDur = tr.dur; }
+    if (tr.phase === 'wait' && !p.stuck){ tr.until = nowMs() + 60000; tr.dur = 60; }
+    if (evBuiltFor !== tr){ evBuiltFor = tr; buildEvPanel(false); }
+    evPanel.style.display = p.stuck ? 'none' : 'block';
+    // かごの中は自由に歩ける（ボタンを押す前も後も）。↓が手前（扉側）
+    if (tr.ex === undefined){ tr.ex = 0; tr.ez = .2; tr.face = Math.PI; }
+    tr.moving = !p.stuck && vm > .2;
+    if (tr.moving){
+      const s = 1.6*dt*((keys.run || btnRun) ? 1.5 : 1)/Math.max(1, vm);
+      tr.ex = clamp(tr.ex + vx*s, -.78, .78); tr.ez = clamp(tr.ez + vy*s, -.78, .78);
+      tr.face = Math.atan2(vx, vy); tr.walkT = (tr.walkT || 0) + dt;
+    }
+  }
+}
+// 進み具合（0〜1）
+function transitProg(tr){
+  if (tr.kind === 'stairs') return tr.prog || 0;
+  if (tr.phase === 'wait') return 0;
+  const left = Math.max(0, (tr.until - nowMs())/1000);
+  return G.p.stuck ? (tr.stuckProg ?? (tr.stuckProg = 1 - left/tr.dur)) : clamp(1 - left/tr.dur, 0, 1);
+}
+// 重ね表示：階数・行き先・操作のヒント（2D・3D 共通）
+function drawTransitHud(now){
+  const p = G.p, tr = p.transit;
+  const f0 = floorOf(G.A.key), f1 = floorOf(tr.dest.area), down = f1 < f0;
+  const prog = transitProg(tr), left = Math.max(0, (tr.until - nowMs())/1000);
+  let cur = Math.round(f0 + (f1 - f0)*prog); if (cur === 0) cur = down ? -1 : 1;
+  ctx.fillStyle = 'rgba(0,0,0,.65)'; rr(SW/2 - 150, 14, 300, 92, 12); ctx.fill();
+  ctx.textAlign = 'center';
+  if (p.stuck){
+    ctx.fillStyle = '#ff5252'; ctx.font = 'bold 22px sans-serif';
+    ctx.fillText(tr.kind === 'elevator' ? '⚠ 緊急停止' : tr.esc ? '⚠ エスカレーター緊急停止' : '階段で揺れに遭遇！', SW/2, 48);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif';
+    ctx.fillText(tr.kind === 'elevator' ? `${floorLabel(cur)} と ${floorLabel(cur + (down ? -1 : 1))} の間で止まりました` : 'バランスを崩して転落…', SW/2, 74);
+  } else {
+    ctx.fillStyle = '#ffca28'; ctx.font = 'bold 30px sans-serif';
+    ctx.fillText(tr.kind === 'elevator' && tr.phase === 'wait' ? floorLabel(f0) : `${down ? '▼' : '▲'} ${floorLabel(cur)}`, SW/2, 52);
+    if (tr.kind === 'elevator' && tr.phase === 'wait'){
+      ctx.fillStyle = 'rgba(0,0,0,.6)'; rr(SW/2 - 170, SH - 46, 340, 30, 8); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif';
+      ctx.fillText(`右のパネルで行き先（${floorLabel(f1)}）のボタンを押す　開：降りる`, SW/2, SH - 26);
+    }
+    if (tr.kind === 'elevator' && tr.phase === 'ride' && left < .05 && !tr.dinged){ tr.dinged = true; evDing(); }
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(`${tr.kind === 'elevator' ? 'エレベーター' : tr.esc ? 'エスカレーター' : '階段'}　${floorLabel(f0)} → ${floorLabel(f1)}　${areaName(tr.dest.area)}`, SW/2, 76);
+    ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.fillRect(SW/2 - 120, 88, 240, 5);
+    ctx.fillStyle = '#ffca28'; ctx.fillRect(SW/2 - 120, 88, 240*prog, 5);
+    if (tr.kind === 'stairs'){
+      ctx.fillStyle = 'rgba(0,0,0,.6)'; rr(SW/2 - 170, SH - 46, 340, 30, 8); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif';
+      ctx.fillText(tr.esc ? (tr.onBelt ? `自動で運ばれています（${down ? '↓' : '↑'}で歩く・逆で戻る／Bでダッシュ）` : `${down ? '↓' : '↑'}で歩いて乗り降り（逆に戻れば元の階へ）`) : `${down ? '↓で降りる・↑で戻る' : '↑で上る・↓で戻る'}（戻りきると元の階へ）／Bでダッシュ`, SW/2, SH - 26);
+      if (p.stamina < 1){ ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fillRect(SW/2 - 60, SH - 58, 120, 6); ctx.fillStyle = p.tired ? '#ff3d00' : '#4fc3f7'; ctx.fillRect(SW/2 - 60, SH - 58, 120*p.stamina, 6); }
+    }
+  }
+  if (G.state === 'alert' || G.state === 'shake'){
+    const a = (Math.sin(now/120)+1)/2 * .14;
+    const grd = ctx.createRadialGradient(SW/2, SH/2, 120, SW/2, SH/2, 420);
+    grd.addColorStop(0, 'rgba(255,0,0,0)'); grd.addColorStop(1, `rgba(255,0,0,${a*3})`);
+    ctx.fillStyle = grd; ctx.fillRect(0, 0, SW, SH);
+  }
+  drawVerdict();
+}
+
 // ====== 更新 ======
 function spawn(x,y,vx,vy,color,size,life){ G.particles.push({x,y,vx,vy,color,size,life,max:life,rot:rand(0,6)}); }
 function update(dt){
@@ -2911,6 +3121,7 @@ function update(dt){
   const hitT = R.alert + R.limit*1000;
   const p = G.p;
   // 階段・エレベーター移動
+  updateTransit(dt);
   if (p && p.transit && !p.stuck && (st === 'normal' || st === 'alert') && now >= p.transit.until) moveTo(p.transit.dest);
 
   if (st === 'alert' && p && !p.transit && !p.crushed && updatePressure(p, G.A.key, dt, p.pushing)){
@@ -3861,11 +4072,107 @@ function updateCam2D(p, st){
   CAM2.x = cl(CAM2.x, SW/(2*zz), MW, open.l, open.r); CAM2.y = cl(CAM2.y, SH/(2*zz), MH, open.u, open.d);
 }
 function applyCam2D(){ ctx.translate(SW/2, SH/2); ctx.scale(CAM2.z, CAM2.z); ctx.translate(-CAM2.x, -CAM2.y); }
+// ---- 移動中の2D画面：階段・エスカレーターは横から、エレベーターはかごを上から見る ----
+let tr2Last = 0;
+function drawPerson2D(X, Y, k, o){ ctx.save(); ctx.translate(X, Y); ctx.scale(k, k); drawChar(0, -9, o); ctx.restore(); }
+function drawTransit2D(now){
+  const p = G.p, tr = p.transit;
+  const dt = Math.min(.05, Math.max(0, (now - (tr2Last || now))/1000)); tr2Last = now;
+  const f0 = floorOf(G.A.key), f1 = floorOf(tr.dest.area), down = f1 < f0;
+  const shaking = G.state === 'shake' || p.stuck;
+  const jx = shaking ? (Math.random()-.5)*6 : 0, jy = shaking ? (Math.random()-.5)*4 : 0;
+  ctx.fillStyle = '#14181f'; ctx.fillRect(0, 0, SW, SH);
+  // 上の表示（階数）と下のヒントの間に収める
+  const top = Math.min(112, SH*.34), bot = SH - 52, band = Math.max(80, bot - top);
+  if (tr.kind === 'elevator'){
+    const C = 2.2, s = Math.max(30, Math.min(SW*.62, band)/(C + .9)), cx = SW/2 + jx, cy = top + band/2 - .2*s + jy;
+    const X = x => cx + x*s, Y = y => cy + y*s, red = !!p.stuck;
+    // 乗り場の床（扉の外）
+    ctx.fillStyle = '#9e9e9e'; ctx.fillRect(X(-1.5), Y(1.1), 3*s, .7*s);
+    // かごの床
+    ctx.fillStyle = '#6d6058'; ctx.fillRect(X(-1.1), Y(-1.1), C*s, C*s);
+    ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
+    for (let i = 1; i < 6; i++){ ctx.beginPath(); ctx.moveTo(X(-1.1 + i*C/6), Y(-1.1)); ctx.lineTo(X(-1.1 + i*C/6), Y(1.1)); ctx.stroke(); }
+    // 天井の明かり
+    const glow = ctx.createRadialGradient(cx, cy - .2*s, 4, cx, cy - .2*s, 1.3*s);
+    glow.addColorStop(0, red ? `rgba(255,60,60,${.35 + Math.sin(now/90)*.2})` : 'rgba(255,255,240,.28)'); glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow; ctx.fillRect(X(-1.1), Y(-1.1), C*s, C*s);
+    // 壁（下が扉）
+    const wt = .12*s; ctx.fillStyle = '#b0bec5';
+    ctx.fillRect(X(-1.1) - wt, Y(-1.1) - wt, C*s + wt*2, wt); ctx.fillRect(X(-1.1) - wt, Y(-1.1), wt, C*s); ctx.fillRect(X(1.1), Y(-1.1), wt, C*s);
+    ctx.fillRect(X(-1.1) - wt, Y(1.1), (C/2 - .6)*s + wt, wt); ctx.fillRect(X(.6), Y(1.1), (C/2 - .6)*s + wt, wt);
+    // 扉：待っている間は開いている（下に出れば降りられる）。動くと閉まる
+    if (tr.phase !== 'wait'){ ctx.fillStyle = '#90a4ae'; ctx.fillRect(X(-.6), Y(1.1), 1.2*s, wt); ctx.fillStyle = '#546e7a'; ctx.fillRect(X(0) - 1, Y(1.1), 2, wt); }
+    // 手すりと操作盤
+    ctx.fillStyle = '#546e7a'; ctx.fillRect(X(-.95), Y(-1.02), 1.9*s, Math.max(2, .05*s));
+    ctx.fillStyle = '#263238'; ctx.fillRect(X(1.02), Y(.45), .08*s, .32*s);
+    for (let i = 0; i < 3; i++){ ctx.fillStyle = '#ffca28'; ctx.beginPath(); ctx.arc(X(1.06), Y(.5 + i*.1), Math.max(1.5, .025*s), 0, 7); ctx.fill(); }
+    // 中の人
+    const face = Math.sin(tr.face ?? Math.PI) >= 0 ? 1 : -1;
+    drawPerson2D(X(tr.ex || 0), Y(tr.ez ?? .2), s/34, {crouch: p.crouch, walk: tr.moving ? tr.walkT : 0, face});
+  } else {
+    const kind = tr.esc ? 'esc' : 'stairs', g = TRG[kind], pts = transitPath(kind), len = pathLen(pts);
+    const W = g.RUNX + g.F*2;
+    const s = Math.max(20, Math.min(SW*.84/W, band/(g.H + 1.5), 90));
+    const ox = SW/2 - (g.RUNX/2)*s + jx, oy = top + band/2 + (g.H + 1.5)*s/2 - .25*s + jy;   // (0,0)：下の床の、斜めの始まり
+    const X = x => ox + x*s, Y = y => oy - y*s;
+    tr.fwdX = down ? -1 : 1;   // 画面では右へ上がっていく
+    // 奥の壁
+    const wall = ctx.createLinearGradient(0, Y(g.H + 2.6), 0, Y(0));
+    wall.addColorStop(0, '#2b313b'); wall.addColorStop(1, '#4a525e');
+    ctx.fillStyle = wall; ctx.fillRect(0, 0, SW, Y(0));
+    // 床（下の階・上の階）と、上の階を支える壁
+    ctx.fillStyle = '#8d9096'; ctx.fillRect(X(g.RUNX), Y(g.H), SW, g.H*s);
+    ctx.fillStyle = '#c4c8cd'; ctx.fillRect(0, Y(0), X(0), .22*s); ctx.fillRect(X(g.RUNX), Y(g.H), SW, .22*s);
+    ctx.fillStyle = '#5f646b'; ctx.fillRect(0, Y(0) + .22*s, SW, SH);
+    // 非常口の案内
+    ctx.fillStyle = '#2e7d32'; ctx.fillRect(X(g.RUNX + g.F/2) - .3*s, Y(g.H + 1.7), .6*s, .32*s);
+    ctx.fillStyle = '#fff'; ctx.font = `bold ${Math.max(8, .16*s)|0}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText('EXIT', X(g.RUNX + g.F/2), Y(g.H + 1.48));
+    // 階の表示
+    const lo = Math.min(f0, f1), hi = Math.max(f0, f1);
+    ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.font = `bold ${Math.max(12, .3*s)|0}px sans-serif`;
+    ctx.fillText(floorLabel(lo), X(-g.F/2), Y(.9));   // 床の上の壁に書く
+    ctx.fillText(floorLabel(hi), X(g.RUNX + g.F*.75), Y(g.H + .9));
+    if (kind === 'stairs'){
+      const RUN = g.RUNX/g.N, RISE = g.H/g.N;
+      for (let i = 0; i < g.N; i++){
+        const top = (i + 1)*RISE;
+        ctx.fillStyle = i % 2 ? '#9e9e9e' : '#a7a7a7'; ctx.fillRect(X(i*RUN), Y(top), RUN*s + 1, top*s);
+        ctx.fillStyle = '#ffca28'; ctx.fillRect(X(i*RUN), Y(top), Math.max(2, .05*s), Math.max(2, .03*s));   // 段鼻のすべり止め
+      }
+      ctx.strokeStyle = '#fdd835'; ctx.lineWidth = Math.max(2, .06*s);
+      ctx.beginPath(); ctx.moveTo(X(-.15), Y(.9 - .1)); ctx.lineTo(X(g.RUNX + .15), Y(g.H + .9 + .1)); ctx.stroke();
+      for (const t of [0, .5, 1]){ ctx.beginPath(); ctx.moveTo(X(g.RUNX*t), Y(g.H*t)); ctx.lineTo(X(g.RUNX*t), Y(g.H*t + .9)); ctx.stroke(); }
+    } else {
+      // エスカレーター：骨組み・流れる踏み段・ガラスの側板と手すり
+      const L = Math.hypot(g.RUNX, g.H), ca = g.RUNX/L, sa = g.H/L;
+      ctx.fillStyle = '#78909c'; ctx.beginPath();
+      ctx.moveTo(X(-.3), Y(0)); ctx.lineTo(X(g.RUNX), Y(g.H)); ctx.lineTo(X(g.RUNX + .3), Y(g.H - .45)); ctx.lineTo(X(0), Y(-.45)); ctx.closePath(); ctx.fill();
+      if (!p.stuck && G.state !== 'shake') tr.belt = ((tr.belt || 0) + dt*1.3*(down ? -1 : 1) + 100) % .4;
+      ctx.fillStyle = '#bdbdbd';
+      for (let i = 0; i < 26; i++){
+        const d = (i*.4 + (tr.belt || 0)) % (L + .4) - .2; if (d < -.1 || d > L + .1) continue;
+        ctx.fillRect(X(ca*d) - .19*s, Y(sa*d) - 2, .38*s, Math.max(3, .06*s));
+      }
+      ctx.fillStyle = 'rgba(179,229,252,.22)'; ctx.beginPath();
+      ctx.moveTo(X(-.2), Y(.1)); ctx.lineTo(X(g.RUNX + .2), Y(g.H + .1)); ctx.lineTo(X(g.RUNX + .2), Y(g.H + .9)); ctx.lineTo(X(-.2), Y(.9)); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#212121'; ctx.lineWidth = Math.max(3, .08*s);
+      ctx.beginPath(); ctx.moveTo(X(-.5), Y(.95)); ctx.lineTo(X(g.RUNX + .5), Y(g.H + .95)); ctx.stroke();
+    }
+    // 歩く人（道は下の床から上の床へ）
+    const d = (down ? 1 - (tr.prog || 0) : (tr.prog || 0)) * len, [px, py] = pathAt(pts, d);
+    const face = tr.fwdX * ((tr.walkDir || 1) < 0 ? -1 : 1);
+    drawPerson2D(X(px), Y(py), s/20, {walk: p.stuck ? 0 : (tr.walkT || 0), face, dead: !!p.stuck});
+  }
+  drawTransitHud(now);
+}
+
 function draw(now){
   ctx.setTransform(DPR,0,0,DPR,0,0);
   ctx.fillStyle = '#000'; ctx.fillRect(0,0,SW,SH);
   if (!G.A){ drawTitleBg(now); return; }
   const A = G.A, p = G.p, st = G.state;
+  if (p && p.transit){ drawTransit2D(now); return; }   // 移動中は専用の画面
   ctx.save();
   updateCam2D(p, st);
   applyCam2D();
@@ -4010,17 +4317,6 @@ function draw(now){
     const g2 = ctx.createRadialGradient(SW/2, SH/2, 80, SW/2, SH/2, 420);
     g2.addColorStop(0, 'rgba(10,12,20,0)'); g2.addColorStop(1, `rgba(10,12,20,${G.A.dim*2})`);
     ctx.fillStyle = g2; ctx.fillRect(0,0,SW,SH);
-  }
-  // 移動中の表示
-  if (p && p.transit){
-    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0,0,SW,SH);
-    const left = Math.max(0, (p.transit.until - nowMs())/1000);
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(p.stuck ? (p.transit.kind === 'elevator' ? 'エレベーター緊急停止！' : '階段で揺れに遭遇！') : (p.transit.kind === 'elevator' ? 'エレベーターで移動中…' : '階段で移動中…'), SW/2, SH/2 - 6);
-    if (!p.stuck){
-      ctx.font = '14px sans-serif'; ctx.fillText(`→ ${areaName(p.transit.dest.area)}　${left.toFixed(1)}秒`, SW/2, SH/2 + 20);
-      ctx.fillStyle = '#ffca28'; ctx.fillRect(SW/2-100, SH/2+32, 200*(1-left/p.transit.dur), 5);
-    }
   }
   if (st === 'alert' || st === 'shake'){
     const a = (Math.sin(now/120)+1)/2 * (G.type === 'eq' ? .14 : .1);
