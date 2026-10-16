@@ -1,0 +1,8 @@
+{
+  "name": "alert-ws",
+  "version": "1.0.0",
+  "private": true,
+  "description": "緊急速報シミュレーター ラウンド配信 + 位置共有 WebSocket サーバ",
+  "main": "server.js",
+  "dependencies": { "ws": "^8.20.0" }
+}

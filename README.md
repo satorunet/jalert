@@ -1,0 +1,69 @@
+# 緊急速報シミュレーター（jalert）
+
+突然鳴り響く **緊急地震速報**・**ミサイル発射情報**。みんなで同時に避難して、生き残れるか？
+ラウンドごとに「生存」か「死亡」かが判定される、オンラインの防災トレーニングゲームです。
+
+▶ プレイ: https://alert.satoru.net
+
+![og](og.png)
+
+> ⚠️ これは訓練用のゲームです。画面の速報・警報はすべて訓練で、本物の緊急地震速報・Jアラートではありません。
+
+## 特徴
+
+- サーバーがラウンド（場所・警報の種類・震度・発報時刻）を決め、参加者全員が同時に避難
+- 地震2回 → ミサイル1回の順。地震は震度5強〜7（震度が大きいほど猶予が短く、判定が厳しい）
+- 37か所のシーン（自宅・学校・駅・電車の中・病院・スーパー・港・キャンプ場・ライブハウス…）
+- 建物の出入り・階段・エレベーター（揺れの最中に乗っていると死亡）、地下、津波避難ビル
+- 家具の転倒・ガラス・ブロック塀・落下物・津波・土砂崩れ・人込みの圧死など、死因つきの判定
+- 場所に合ったNPC（最大70人）が会話し、警報時は冷静に避難／パニック／固まる
+- 偶然要素（固定された家具、崩落場所、運）はラウンドごとの seed で全員共通
+- チャット（定型文あり）、生存ランキング、スマホ向けのスティック＋4ボタン操作
+
+## 構成
+
+```
+index.html        ゲーム本体（HTML/CSS/JS 1ファイル）
+og.png            OGP画像
+server/server.js  ラウンド配信・位置共有・ランキングの WebSocket サーバ（Node.js + ws）
+sounds/           警報音を置く場所（同梱なし。sounds/README.md）
+```
+
+## 動かし方
+
+### サーバ
+
+```sh
+cd server
+npm install
+ALERT_WS_HOST=127.0.0.1 ALERT_WS_PORT=8766 node server.js
+```
+
+ランキングは `server/data/ranking.json` に保存されます。
+
+### Web サーバ（nginx の例）
+
+`index.html` と同じ場所の `/ws` を WebSocket サーバへ中継します。
+
+```nginx
+server {
+    server_name alert.example.com;
+    root /path/to/jalert;
+    location = /ws {
+        proxy_pass http://127.0.0.1:8766/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 86400s;
+    }
+    location ^~ /server/ { return 404; }
+}
+```
+
+サーバに接続できない場合は、ブラウザ内だけで同じルールのラウンドが続きます（オフライン）。
+
+## ライセンス
+
+[MIT License](LICENSE) © 2026 satoru.net
+
+警報音の音声ファイルは含まれていません（第三者の権利物のため）。

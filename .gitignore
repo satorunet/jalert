@@ -1,0 +1,8 @@
+# 警報音は第三者の音声のため同梱しない（sounds/README.md 参照）
+sounds/*.mp3
+sounds/*.m4a
+sounds/*.wav
+sounds/*.ogg
+server/node_modules/
+server/data/
+.DS_Store
