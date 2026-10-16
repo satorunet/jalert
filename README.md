@@ -26,6 +26,7 @@
 index.html        ゲーム本体（HTML/CSS/JS）
 synth.js          警報音の試作（ブラウザ内合成）
 sound-lab.html    警報音ラボ（本物と試作音の聞き比べ）
+bust.sh           キャッシュバスター（音声・synth.js を差し替えたら実行）
 og.png            OGP画像
 server/server.js  ラウンド配信・位置共有・ランキングの WebSocket サーバ（Node.js + ws）
 sounds/           警報音を置く場所（同梱なし。sounds/README.md）

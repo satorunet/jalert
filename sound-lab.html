@@ -56,11 +56,11 @@ a{color:#90caf9}
   <p class="lead" style="margin-top:22px">ゲーム内では ☰ メニューの「警報音」で、実際の音／試作A／B／C を切り替えられます。<br>
   <a href="./">← 緊急速報シミュレーターへ戻る</a></p>
 </main>
-<script src="synth.js"></script>
+<script src="synth.js?v=785df45dbd"></script>
 <script>
 (() => {
   let AC = null, master = null, bus = null, analyser = null, timers = [];
-  const real = {eq: 'sounds/eew.mp3', ms: 'sounds/missile.mp3'}, realBuf = {};
+  const real = {eq: 'sounds/eew.mp3?v=80df5d583b', ms: 'sounds/missile.mp3?v=8893bf79d5'}, realBuf = {};   // ?v= はキャッシュバスター（bust.sh）
   const VOICE = {
     eq: ['緊急地震速報。強い揺れに警戒してください。', '緊急地震速報。身の安全を確保してください。'],
     ms: ['ミサイル発射。ミサイル発射。ミサイルが発射されたものとみられます。建物の中、または地下に避難してください。'],

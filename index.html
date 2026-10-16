@@ -348,7 +348,7 @@ table.rk tr.gap td{text-align:center;color:var(--muted);border:none}
 
 </div>
 
-<script src="synth.js"></script>
+<script src="synth.js?v=785df45dbd"></script>
 <script>
 (() => {
 'use strict';
@@ -1364,12 +1364,13 @@ function clearLater(){ while (timers.length) clearTimeout(timers.pop()); }
 
 // 音声ファイル（sounds/ に置くと合成音の代わりに再生。無ければ合成音）
 const SOUND_FILES = {eq:'sounds/eew', ms:'sounds/missile'};
+const SOUND_V = {eq:'80df5d583b', ms:'8893bf79d5'};   // キャッシュバスター（bust.sh が中身のハッシュを書き込む）
 const sndBuf = {};
 async function loadSoundFiles(){
   for (const [k, base] of Object.entries(SOUND_FILES)){
     for (const ext of ['mp3','m4a','wav','ogg']){
       try{
-        const r = await fetch(`${base}.${ext}`, {cache:'no-cache'});
+        const r = await fetch(`${base}.${ext}?v=${SOUND_V[k] || ''}`, {cache:'no-cache'});
         if (!r.ok) continue;
         sndBuf[k] = await AC.decodeAudioData(await r.arrayBuffer());
         break;
