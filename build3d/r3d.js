@@ -263,6 +263,39 @@ function buildArea(A){
   W3.green = new THREE.Group(); W3.green.visible = false; grp.add(W3.green);
   W3.greenFor = null;
 }
+// ====== となりのマップ（簡易版の立体。シームレスに見せる） ======
+const NB3 = {};
+function buildLite(A){
+  const grp = new THREE.Group();
+  const top = paintArea(A, true);
+  const tm = new THREE.MeshLambertMaterial({map: top.tex});
+  const gp = new THREE.Mesh(new THREE.PlaneGeometry(COLS, ROWS), tm);
+  gp.rotation.x = -Math.PI/2; gp.position.set(COLS/2, 0, ROWS/2); gp.receiveShadow = true; grp.add(gp);
+  const img = top.canvas.getContext('2d').getImageData(0, 0, top.canvas.width, top.canvas.height);
+  const sideMats = {};
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++){
+    const ch = A.grid[y][x];
+    if (!'#BFWSKVTCN'.includes(ch)) continue;
+    if (ch === 'B' && A.bStyle === 'shrine') continue;
+    let h = ch === 'W' ? 1.25 : ch === 'T' ? 1.9 : tileHeight(A, ch, x, y);
+    const key = ch + (ch === '#' ? '' : x + ',' + y);
+    const side = sideMats[key] || (sideMats[key] = new THREE.MeshLambertMaterial({color: tileColor(img, x, y)}));
+    if (ch === 'T'){ const lf = new THREE.Mesh(new THREE.SphereGeometry(.55, 8, 6), new THREE.MeshLambertMaterial({color: 0x33691e})); lf.position.set(x + .5, 1.45, y + .5); grp.add(lf); continue; }
+    const geo = new THREE.BoxGeometry(1, h, 1); topMapped(geo, x + .5, y + .5);
+    const me = new THREE.Mesh(geo, [side, side, tm, side, side, side]); me.position.set(x + .5, h/2, y + .5); grp.add(me);
+  }
+  return grp;
+}
+function updateNeighbors3D(A){
+  const used = new Set();
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){
+    if (!dx && !dy) continue;
+    const k = worldNb(A.key, dx, dy); if (!k) continue;
+    let g = NB3[k]; if (!g){ g = NB3[k] = buildLite(getArea(k)); R3.scene.add(g); }
+    g.position.set(dx*COLS, 0, dy*ROWS); g.visible = true; used.add(k);
+  }
+  for (const k in NB3) if (!used.has(k)) NB3[k].visible = false;
+}
 // 大きな装飾（鳥居・本殿・観覧車・ステージ・電車・船・避難タワー・パラソル）
 function buildDecor3D(A, grp){
   const k = A.key;
@@ -442,7 +475,11 @@ function draw3D(now, dt){
   }
   const A = G.A, p = G.p;
   const wantKey = A.key + ':' + (G.seed || 0);
-  if (W3.key !== wantKey) buildArea(A);
+  if (W3.key !== wantKey){
+    buildArea(A); updateNeighbors3D(A);
+    // 端を越えてとなりのマップに来たときは、カメラもずらしてつながって見せる
+    if (G.cross && !G.cross.done){ G.cross.done = true; R.camera.position.x -= G.cross.dx*COLS; R.camera.position.z -= G.cross.dy*ROWS; }
+  }
   if (drawTransit3D(now, dt)) return;
   if (R.camera.fov !== 48){ R.camera.fov = 48; R.camera.updateProjectionMatrix(); }
   if (W3.group) W3.group.visible = true;

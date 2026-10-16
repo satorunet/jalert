@@ -26,7 +26,6 @@ rep('<meta property="og:url" content="https://alert.satoru.net/2d/">', '<meta pr
 rep("#cv{width:100%;height:100%;display:block;touch-action:none}",
     "#cv,#gl{position:absolute;inset:0;width:100%!important;height:100%!important;display:block;touch-action:none}\n#gl{z-index:0}\n#cv{z-index:1}\n"
     "/* 3D 版：ゲーム画面を大きく（比率を固定せず、空いている場所いっぱいに） */\n#app{max-width:1600px!important}\n#stage{width:100%!important;height:100%!important;aspect-ratio:auto!important}")
-rep("const cv = $('cv'), ctx = cv.getContext('2d');", "const cv = $('cv'); let ctx = cv.getContext('2d');")
 rep("  update(dt);\n  draw(t);", "  update(dt);\n  draw3D(t, dt);")
 rep("""  const r = cv.getBoundingClientRect();
   const sx = (e.clientX - r.left) / r.width * SW, sy = (e.clientY - r.top) / r.height * SH;

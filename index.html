@@ -465,7 +465,7 @@ const AREAS = {
       '..GGGGGGGGGGGGGGGG..',
       '..GGGGGGGGGGGGGGGG..',
       '.T..................',
-      'VVVVVVVVVVVVVVVVVVVV',
+      'VVVVVVVVV..VVVVVVVVV',
     ],
     labels: [{x:10,y:6.5,t:'校庭'},{x:3,y:0.6,t:'校舎'}],
     portals: [7,8,9,10,11,12].map(x => ({x,y:0,to:'@back',kind:'door'})),
@@ -555,7 +555,7 @@ const AREAS = {
       'LLLLLLLLLLLLLLLLLLLL',
       '____________________',
       '...O....N....O....N.',
-      '....................',
+      'X...................',
       '.K..UU.......UU..K..',
       '....................',
       '...O....N....O....N.',
@@ -564,8 +564,9 @@ const AREAS = {
       'LLLLLLLLLLLLLLLLLLLL',
       '####################',
     ],
-    labels: [{x:4.5,y:7.4,t:'地下通路へ'},{x:14,y:7.4,t:'地下通路へ'},{x:10,y:2.6,t:'線路'},{x:3.5,y:5.2,t:'柱'}],
-    portals: [4,5,13,14].map(x => ({x,y:6,to:'chika',tx:3.5,ty:5.5,kind:'stairs',dur:1.5})),
+    labels: [{x:4.5,y:7.4,t:'地下通路へ'},{x:14,y:7.4,t:'地下通路へ'},{x:10,y:2.6,t:'線路'},{x:3.5,y:5.2,t:'柱'},{x:1.6,y:4.6,t:'改札'}],
+    portals: [...[4,5,13,14].map(x => ({x,y:6,to:'chika',tx:3.5,ty:5.5,kind:'stairs',dur:1.5})), {x:0,y:5,to:'@back',kind:'door'}],
+    back: {area:'stationFront', x:3.5, y:2.5},
   },
   super: {
     name: 'スーパー', indoor: true, floor: '#f4f1ea', wall: '#e57373', sStyle: 'market', nStyle: 'register', pillar: true, floorStyle: 'check', xStyle: 'auto',
@@ -585,7 +586,8 @@ const AREAS = {
       'WWWWWWWWWXXWWWWWWWWW',
     ],
     labels: [{x:10,y:1.6,t:'バックヤード（窓なし）'},{x:6,y:4.5,t:'商品棚'},{x:7,y:10.5,t:'レジ'},{x:15.5,y:5.4,t:'柱'},{x:10,y:11.4,t:'出口'}],
-    portals: [9,10].map(x => ({x,y:12,to:'parking',tx:x+.5,ty:1.5,kind:'door'})),
+    portals: [9,10].map(x => ({x,y:12,to:'@back',kind:'door'})),
+    back: {area:'parking', x:9.5, y:1.5},
   },
   parking: {
     name: '駐車場', indoor: false, floor: '#8f9399', wall: '#78909c', openSafe: true,
@@ -731,7 +733,8 @@ const AREAS = {
       'WWWWWWWWXXWWWWWWWWWW',
     ],
     labels: [{x:4.5,y:2.6,t:'冷蔵ケース'},{x:14.5,y:1.6,t:'バックヤード（窓なし）'},{x:14,y:10.6,t:'レジ'},{x:9,y:11.4,t:'出入口'}],
-    portals: [8,9].map(x => ({x,y:12,to:'parking',tx:x+.5,ty:1.5,kind:'door'})),
+    portals: [8,9].map(x => ({x,y:12,to:'@back',kind:'door'})),
+    back: {area:'parking', x:9.5, y:1.5},
   },
   beach: {
     name: '海辺', indoor: false, tsunami: true, floor: '#cfc9bb', wall: '#78909c',
@@ -852,7 +855,7 @@ const AREAS = {
       'TT..V..........V..TT',
       'TTNN..............TT',
       'TT.....V....V.....TT',
-      'TT................TT',
+      '....................',
       'TTTTTTTT....TTTTTTTT',
     ],
     labels: [{x:10,y:0.4,t:'本殿（古い木造）'},{x:10,y:4.2,t:'賽銭箱'},{x:4.5,y:5.5,t:'石灯籠'},{x:7.5,y:7.5,t:'狛犬'},
@@ -903,19 +906,19 @@ const AREAS = {
   park: {
     name: '公園', indoor: false, openSafe: true, floor: '#d9cfb0', wall: '#78909c',
     map: [
-      'TTTTTTTTTTTTTTTTTTTT',
-      'T....GGGGGGGG......T',
-      'T..V.GGGGGGGG..BB..T',
-      'T....GGGGGGGG..BB..T',
-      'T..V.GGGGGGGG......T',
-      'T....GGGGGGGG..N...T',
-      'T....GGGGGGGG......T',
+      'TTTTTTTTT..TTTTTTTTT',
+      'T....GGGGGGGG.......',
+      'T..V.GGGGGGGG..BB...',
+      '.....GGGGGGGG..BB...',
+      '...V.GGGGGGGG.......',
+      '.....GGGGGGGG..N....',
+      '.....GGGGGGGG.......',
       'T~~~.GGGGGGGG..N...T',
       'T~~~.GGGGGGGG......T',
       'T~~~...............T',
       'T...VV......VV.....T',
-      'T..................T',
-      'TTTTTTTTTTTTTTTTTTTT',
+      '...................T',
+      'TTTTTTTTT..TTTTTTTTT',
     ],
     labels: [{x:9,y:5,t:'芝生広場'},{x:3,y:1.4,t:'遊具'},{x:16,y:1.4,t:'トイレ'},{x:2,y:6.6,t:'池'},{x:5,y:11.4,t:'遊具'}],
     portals: [],
@@ -1136,9 +1139,9 @@ const AREAS = {
       'FFFFFFFFFFFFFFFFFFFF',
       'FFFFFFFFFFFFFFFFFFFF',
       'TT..CC.....CC.....TT',
-      'T..................T',
-      'T...K.....GGGGGG...T',
-      'T.........GGGGGG...T',
+      'T...................',
+      'T...K.....GGGGGG....',
+      'T.........GGGGGG....',
       'T..CC.....GGGGGG.CCT',
       'T.........GGGGGG...T',
       'T..N..............TT',
@@ -1234,6 +1237,171 @@ const AREAS = {
     portals: [7,8,9].map(x => ({x,y:12,to:'@back',kind:'door'})),
     back: {area:'town', x:9.5, y:6.5},
   },
+  stationFront: {
+    name: '駅前', indoor: false, openSafe: true, floor: '#cfc9bb', wall: '#78909c', nStyle: 'bench',
+    map: [
+      'BBBBBBBB.GG.BBBBBBBB',
+      'BBBEEBBB....BBBBBBBB',
+      '....................',
+      '..N...N......N...N..',
+      'RRRRRRRRRRRRRRRRRRRR',
+      'RRRRRRRRRRRRRRRRRRRR',
+      '....................',
+      '...AA..GGGGGG..AA...',
+      '.......GGTGG........',
+      '.......GGGGGG.......',
+      'VVVVV..........VVVVV',
+      '....................',
+      'BBBBBBBBB..BBBBBBBBB',
+    ],
+    labels: [{x:4,y:0.6,t:'駅舎（改札へ）'},{x:4,y:2.6,t:'バス停'},{x:4.5,y:6.6,t:'タクシー乗り場'},{x:10,y:8.5,t:'駅前広場'}],
+    portals: [3,4].map(x => ({x,y:1,to:'station',tx:1.5,ty:5.5,kind:'door'})),
+  },
+  hillside: {
+    name: '高台の避難場所', indoor: false, openSafe: true, floor: '#cdb98f', wall: '#6d5f52',
+    map: [
+      'FFFFFFFFFFFFFFFFFFFF',
+      'FFFFFFFFFFFFFFFFFFFF',
+      'MMMMMMMMMMMMMMMMMMMM',
+      'MMMBBBBBBMMMMMMMMMMM',
+      'MMMBBBEBBMMMMTMMMMMM',
+      'MMMMMMMMMMMMMMMMMMMM',
+      '....................',
+      'GGGGGG..GGGGGG..GGGG',
+      'GGGTGG..GGGGGG..GTGG',
+      '....................',
+      'GGGGGGGG..GGGGGGGGGG',
+      'GGGGGGGG..GGGGGGGGGG',
+      'TTTTTTTT..TTTTTTTTTT',
+    ],
+    labels: [{x:12,y:2.4,t:'高台（避難場所）'},{x:6,y:5.5,t:'避難所'},{x:10,y:0.8,t:'崖（土砂崩れ注意）'}],
+    portals: [{x:6,y:4,to:'evacBldg',tx:10.5,ty:10.5,kind:'door'}],
+  },
+  riverside: {
+    name: '河川敷', indoor: false, openSafe: true, floor: '#cfc9bb', wall: '#78909c', nStyle: 'bench',
+    map: [
+      'GGGGGGGG..GG~~~~GGGG',
+      'GGTGGGGG..GG~~~~GGTG',
+      'GGGGGGGG..GG~~~~GGGG',
+      '..........GG~~~~....',
+      'RRRRRRRRRRRRRRRRRRRR',
+      'RRRRRRRRRRRRRRRRRRRR',
+      '..........GG~~~~....',
+      'GGGGGGGG..GG~~~~GGGG',
+      'GGGGGGGG..GG~~~~GGGG',
+      'GGNGGGGG..GG~~~~GGGG',
+      'GGGGGGGG..GG~~~~GGGG',
+      'GGGGGGGG..GG~~~~GGGG',
+      'GGGGGGGG..GG~~~~GGGG',
+    ],
+    labels: [{x:14,y:1.5,t:'川'},{x:14,y:4.5,t:'橋'},{x:4,y:8.5,t:'河川敷（広い場所）'}],
+    portals: [],
+  },
+  farmland: {
+    name: '田んぼ', indoor: false, openSafe: true, floor: '#cdb98f', wall: '#6d5f52',
+    map: [
+      'GGGG....GGGGGGGG.GGG',
+      'G~~~~~..~~~~~~~~.~~G',
+      'G~~~~~..~~~~~~~~.~~G',
+      'G~~~~~..~~~~~~~~.~~G',
+      'RRRRRRRRRRRRRRRRRRRR',
+      'RRRRRRRRRRRRRRRRRRRR',
+      '....................',
+      'G~~~~~..~~~~~~..BBBG',
+      'G~~~~~..~~~~~~..BBBG',
+      'G~~~~~..~~~~~~......',
+      'G~~~~~..~~~~~~..T...',
+      'GGGGGG..GGGGGGGG....',
+      'GGGGGGGG....GGGGGGGG',
+    ],
+    labels: [{x:3.5,y:2,t:'田んぼ'},{x:17.5,y:6.6,t:'農家'},{x:7,y:9,t:'あぜ道'}],
+    portals: [],
+  },
+  shoppingSt: {
+    name: '商店街', indoor: false, floor: '#d9cfc0', wall: '#8d6e63', nStyle: 'bench',
+    map: [
+      'BBBBBBBB..BBBBBBBBBB',
+      'BBXBBXBB..BBXBBBXBBB',
+      '....................',
+      '..N.....J....J...N..',
+      '....................',
+      '....................',
+      '....................',
+      '..N.....J....J...N..',
+      '....................',
+      'BBBXBB......BBXBBBBB',
+      'BBBB........BBBBBBBB',
+      'BBBB....BBBBBBBBBBBB',
+      'BBBB....BBBBBBBBBBBB',
+    ],
+    labels: [{x:2.5,y:0.4,t:'コンビニ'},{x:5.5,y:0.4,t:'食堂'},{x:12.5,y:0.4,t:'ゲーセン'},{x:16.5,y:0.4,t:'図書館'},
+      {x:3.5,y:10,t:'スーパー'},{x:14.5,y:10,t:'銭湯'},{x:10,y:5,t:'商店街（アーケード）'}],
+    portals: [
+      {x:2,y:1,to:'konbini',tx:8.5,ty:11.5,kind:'door'}, {x:5,y:1,to:'restaurant',tx:9.5,ty:11.5,kind:'door'},
+      {x:12,y:1,to:'arcade',tx:8.5,ty:11.5,kind:'door'}, {x:16,y:1,to:'library',tx:4.5,ty:11.5,kind:'door'},
+      {x:3,y:9,to:'super',tx:9.5,ty:11.5,kind:'door'}, {x:14,y:9,to:'sento',tx:7.5,ty:11.5,kind:'door'},
+    ],
+  },
+  officeDist: {
+    name: 'オフィス街', indoor: false, floor: '#cfc9bb', wall: '#78909c',
+    map: [
+      'BBBBBBBBB...BBBBBBBB',
+      'BBBBBBBBB...BBBBBBBB',
+      'BBBBEBBBB...BBBEBBBB',
+      '....................',
+      'RRRRRRRRRRRRRRRRRRRR',
+      'RRRRRRRRRRRRRRRRRRRR',
+      '....................',
+      'BBBBBB..GGGG..BBBBBB',
+      'BBBBBB..GTGG..BBBBBB',
+      'BBBEBB..GGGG..BBEBBB',
+      '....................',
+      'VVVVVV........VVVVVV',
+      'BBBBBBBB....BBBBBBBB',
+    ],
+    labels: [{x:4.5,y:1.2,t:'オフィスビル'},{x:10,y:8,t:'広場'},{x:16,y:8,t:'ガラス張りのビル'}],
+    portals: [{x:4,y:2},{x:15,y:2},{x:3,y:9},{x:16,y:9}].map(q => ({...q, to:'lobby', tx:9.5, ty:11.5, kind:'door'})),
+  },
+  hospitalFront: {
+    name: '病院前', indoor: false, openSafe: true, floor: '#cfc9bb', wall: '#90a4ae',
+    map: [
+      'BBBBBBBBB..BBBBBBBBB',
+      'BBBBBBBBB..BBBBBBBBB',
+      'BBBBEEBBB..BBBBBBBBB',
+      '....................',
+      'RRRRRRRRRRRRRRRRRRRR',
+      'RRRRRRRRRRRRRRRRRRRR',
+      '....................',
+      '..AA..AA....GGGGGG..',
+      '............GGTGGG..',
+      '..AA..AA....GGGGGG..',
+      '....................',
+      '....................',
+      'VVVVVVVVVVVVVVVVVVVV',
+    ],
+    labels: [{x:4.5,y:1,t:'病院（入口）'},{x:4.5,y:6.6,t:'救急車・駐車場'},{x:15,y:6.6,t:'植え込み'}],
+    portals: [4,5].map(x => ({x,y:2,to:'lobby',tx:9.5,ty:11.5,kind:'door'})),
+  },
+  industrial: {
+    name: '工業地帯', indoor: false, floor: '#a9a9a1', wall: '#5f6b73', sStyle: 'container', kStyle: 'tank',
+    map: [
+      'BBBBBBBB....BBBBBBBB',
+      'BBBBBBBB....BBBBBBBB',
+      'BBBEBBBB....BBBBBBBB',
+      '....................',
+      'RRRRRRRRRRRRRRRRRRRR',
+      'RRRRRRRRRRRRRRRRRRRR',
+      '....................',
+      '.SS.SS.SS...KK..KK..',
+      '.SS.SS.SS...KK..KK..',
+      '....................',
+      '..A......A......A...',
+      '....................',
+      'VVVVVVVVVVVVVVVVVVVV',
+    ],
+    labels: [{x:3.5,y:0.6,t:'工場（倉庫の入口）'},{x:5,y:6.6,t:'コンテナ置き場'},{x:15,y:6.6,t:'タンク'}],
+    portals: [{x:3,y:2,to:'warehouse',tx:7.5,ty:11.5,kind:'door'}],
+  },
 };
 
 const SCENES = {
@@ -1274,6 +1442,14 @@ const SCENES = {
   livehouse:  {name:'ライブハウス',   area:'livehouse', start:{x:9.5,y:6.5},  tip:'満員の会場では出口に殺到すると将棋倒しに。照明やスピーカーから離れ、その場で身を低く。'},
   nursery:    {name:'保育園',         area:'nursery',   start:{x:9.5,y:4.5},  tip:'保育園では子どもを机の下や布団へ。おもちゃ棚や窓から離れる。'},
   arcade:     {name:'ゲームセンター', area:'arcade',    start:{x:9.5,y:5.5},  tip:'ゲームセンターでは大型のゲーム機やUFOキャッチャーが倒れてくる。機械から離れて身を低く。'},
+  stationFront:{name:'駅前',         area:'stationFront', start:{x:9.5,y:6.5},  tip:'駅前ではガラスの多い駅舎や看板、バス・タクシーに注意。広場の真ん中へ。'},
+  hillside:   {name:'高台の避難場所', area:'hillside',   start:{x:9.5,y:9.5},  tip:'津波のときは高台へ。ただし崖の近くは土砂崩れに注意。'},
+  riverside:  {name:'河川敷',         area:'riverside',  start:{x:4.5,y:8.5},  tip:'川のそばでは堤防や橋に近づかない。津波は川をさかのぼってくる。'},
+  farmland:   {name:'田んぼ',         area:'farmland',   start:{x:9.5,y:6.5},  tip:'田んぼや畑は広くて安全な場所が多い。用水路や電柱に注意。'},
+  shoppingSt: {name:'商店街',         area:'shoppingSt', start:{x:10.5,y:5.5}, tip:'商店街ではアーケードの看板や照明、店先の商品が落ちてくる。建物から離れて身を低く。'},
+  officeDist: {name:'オフィス街',     area:'officeDist', start:{x:10.5,y:6.5}, tip:'ビル街ではガラスや外壁が降ってくる。ビルから離れるか、頑丈なビルの中へ。'},
+  hospitalFront:{name:'病院前',       area:'hospitalFront', start:{x:9.5,y:6.5}, tip:'病院前では救急車の出入りに注意。広い植え込みのそばで身を低く。'},
+  industrial: {name:'工業地帯',       area:'industrial', start:{x:10.5,y:6.5}, tip:'工場ではタンクやコンテナ、配管に注意。火災や有毒ガスの発生にも気をつける。'},
 };
 const SCENE_KEYS = Object.keys(SCENES);
 const TIPS = {
@@ -1281,6 +1457,16 @@ const TIPS = {
   ms: 'ミサイル発射情報が出たら、屋外では<b>頑丈な建物や地下へ</b>。近くになければ物陰に隠れるか<b>地面に伏せて頭部を守る</b>。屋内では<b>窓から離れ、窓のない部屋へ</b>。',
 };
 
+// ====== ワールド：屋外のマップどうしを、端でシームレスにつなぐ ======
+// マップの端まで歩くと、となりのマップの同じ位置に出る（となりのマスが歩ける場所のときだけ）
+const WORLD = [
+  ['camp',     'hillside',   'shrine',     'park',          'schoolYard'],
+  ['homeOut',  'riverside',  'town',       'stationFront',  'amusement'],
+  ['farmland', 'shoppingSt', 'officeDist', 'hospitalFront', 'stadium'],
+  ['beach',    'port',       'industrial', 'parking',       null],
+];
+WORLD.forEach((row, wy) => row.forEach((k, wx) => { if (k) AREAS[k].world = {x: wx, y: wy}; }));
+function worldNb(key, dx, dy){ const w = AREAS[key] && AREAS[key].world; if (!w) return null; const r = WORLD[w.y + dy]; return (r && r[w.x + dx]) || null; }
 // エリアの読み込み（グリッドとタイル位置の索引）
 const areaCache = {};
 function getArea(key){
@@ -1785,6 +1971,8 @@ function sceneAreas(start){
       const dst = portalDest(A, pt);
       if (dst && !seen.has(dst.area)){ seen.set(dst.area, d+1); q.push(dst.area); }
     }
+    // オープンワールド：となりの屋外マップにも人がいるように
+    if (d === 0) for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]){ const nb = worldNb(k, dx, dy); if (nb && !seen.has(nb)){ seen.set(nb, 2); } }
   }
   return [...seen.keys()];
 }
@@ -1823,6 +2011,10 @@ const NPC_POOL = {
   amusement:['家族連れ','カップル','子ども','高校生','スタッフ:2','着ぐるみ:1'], camp:['キャンパー','家族連れ','子ども','管理人:1'],
   museum:['来館者','学芸員:1','学生','おじいちゃん:1','警備員:1'], livehouse:['観客','観客','観客','バンドマン:4','スタッフ:2'],
   nursery:['園児','園児','園児','保育士:3'], arcade:['客','高校生','大学生','店員:1'],
+  stationFront:['通勤客','乗客','学生','観光客','タクシー運転手:2','駅員:1'], hillside:['避難者','おじいちゃん:2','近所の人','子ども'],
+  riverside:['ジョギング中の人','犬の散歩の人','釣り人','子ども','高校生'], farmland:['農家の人','おじいちゃん:2','おばあちゃん:2','子ども'],
+  shoppingSt:['買い物客','主婦','おばあちゃん:2','店主:3','高校生'], officeDist:['会社員','会社員','OL','警備員:2','配達員:1'],
+  hospitalFront:['患者','お見舞い客','看護師:1','救急隊員:2','タクシー運転手:1'], industrial:['作業員','作業員','主任:1','トラック運転手:2'],
 };
 const NPC_POOL_NIGHT = {
   town:['残業帰りの会社員','酔っぱらい','通行人','タクシー運転手:1','警察官:1'],
@@ -1838,7 +2030,7 @@ const NPC_COLOR = {
   '看護師':'#f48fb1','夜勤の看護師':'#f48fb1','医師':'#eceff1','当直医':'#eceff1','入院患者':'#90caf9',
   '警備員':'#283593','駅員':'#1a237e','警察官':'#0d47a1','店員':'#43a047','夜勤の店員':'#43a047',
   '巫女':'#d32f2f','神主':'#f3efe4','作業員':'#f9a825','主任':'#f57f17','フォークリフト運転手':'#f9a825',
-  'シェフ':'#fafafa','港湾作業員':'#f9a825','漁師':'#1e88e5','スタッフ':'#e53935','着ぐるみ':'#ffcc80','管理人':'#558b2f','学芸員':'#455a64','バンドマン':'#212121','園児':'#fbc02d','ドライバー':'#607d8b','車掌':'#1a237e','空港スタッフ':'#00838f','保育士':'#ffb74d','ホテルスタッフ':'#4a148c','夜勤のスタッフ':'#4a148c','応援団':'#212121','ビール売り':'#fbc02d','選手':'#ffffff','番台さん':'#5d4037','係員':'#6a1b9a','司書':'#795548','受付係':'#00897b','清掃員':'#78909c','ライフセーバー':'#e53935',
+  'シェフ':'#fafafa','店主':'#6d4c41','救急隊員':'#f5f5f5','農家の人':'#8d6e63','港湾作業員':'#f9a825','漁師':'#1e88e5','スタッフ':'#e53935','着ぐるみ':'#ffcc80','管理人':'#558b2f','学芸員':'#455a64','バンドマン':'#212121','園児':'#fbc02d','ドライバー':'#607d8b','車掌':'#1a237e','空港スタッフ':'#00838f','保育士':'#ffb74d','ホテルスタッフ':'#4a148c','夜勤のスタッフ':'#4a148c','応援団':'#212121','ビール売り':'#fbc02d','選手':'#ffffff','番台さん':'#5d4037','係員':'#6a1b9a','司書':'#795548','受付係':'#00897b','清掃員':'#78909c','ライフセーバー':'#e53935',
 };
 // ふだんの会話（場所ごと＋役ごと）
 const NPC_TALK = {
@@ -1877,6 +2069,10 @@ const NPC_TALK = {
   amusement:['次ジェットコースター乗ろう！','観覧車乗りたい','ポップコーンおいしい','写真撮ろ！'], camp:['火おこせた？','カレーできたよー','星きれいだね','テント張るの手伝って'],
   museum:['この絵すごいね','（静かに鑑賞中）','写真禁止だよ','解説聞こう'], livehouse:['最高ー！','アンコール！','次の曲なに？','前行こうぜ'],
   nursery:['せんせー見てー','おえかきしよう','おやつまだー？','ブロックで遊ぼ'], arcade:['あと100円…','とれた！','もう一回！','連コインするか'],
+  stationFront:['電車間に合う？','バスもう来るよ','待ち合わせ場所ここ？','タクシー乗り場どこ'], hillside:['ここなら津波も大丈夫','いい眺めだね','避難所の場所覚えておこう'],
+  riverside:['川の流れ速いね','いい天気','橋渡ろう','ボール遊びしよ'], farmland:['今年は豊作だ','田植え終わったね','カエル鳴いてる'],
+  shoppingSt:['コロッケ揚げたてだよ！','安いよ安いよ！','今日は特売日','あの店新しいね'], officeDist:['会議に遅れる！','ランチどこ行く？','外回り行ってきます'],
+  hospitalFront:['救急車通ります','お見舞い何持ってく？','受付どこだっけ'], industrial:['フォーク通りまーす','荷下ろし完了','安全確認よし！'],
 };
 const NPC_TALK_ROLE = {
   '先生':['はい、席について','廊下は走らない！','宿題出してねー'], '体育の先生':['集合ー！','ピッ！（笛）'],
@@ -2250,7 +2446,7 @@ function locEval(A, px, py, type, L){
       return {g:'good', c:'debris', m:'地下は比較的安全。柱や壁のそばならさらに安全。'};
     }
     if (A.pillar && nearDist(A,px,py,['O']) < 0.9) return {g:'perfect', m:'柱のそばで姿勢を低くして身を守りました。'};
-    if (!A.indoor && (tile === 'G' || (A.openSafe && tile === '.' && nearDist(A,px,py,['A']) > 0.8))) return {g:'perfect', m:'建物やブロック塀から離れた広い場所に避難できました。'};
+    if (!A.indoor && (tile === 'G' || tile === 'M' || (A.openSafe && tile === '.' && nearDist(A,px,py,['A']) > 0.8))) return {g:'perfect', m:'建物やブロック塀から離れた広い場所に避難できました。'};
     if (!A.indoor && tile === 'R') return {g:'good', c:'debris', m:'車道は車が止まれず危険。歩道や広場へ。'};
     if (!A.indoor) return {g:'good', c:'debris', m:'危険物からは離れていたが、広い場所ではありませんでした。'};
     return {g:'good', c:'debris', m:'家具や窓からは離れたが、身を隠す場所がありませんでした。'};
@@ -2459,10 +2655,34 @@ function showRanking(){
 // ====== 移動・エリア移動 ======
 const walkA = (A, tx, ty) => tx>=0 && ty>=0 && tx<COLS && ty<ROWS && !SOLID.has(A.grid[ty][tx]);
 const walk = (tx, ty) => walkA(G.A, tx, ty);
+// となりのマップも含めて歩けるか（プレイヤーの移動用）
+function walkW(tx, ty){
+  if (tx >= 0 && ty >= 0 && tx < COLS && ty < ROWS) return walk(tx, ty);
+  const dx = tx < 0 ? -1 : tx >= COLS ? 1 : 0, dy = ty < 0 ? -1 : ty >= ROWS ? 1 : 0;
+  if (dx && dy) return false;
+  const k = worldNb(G.A.key, dx, dy); if (!k) return false;
+  const B = getArea(k), x = tx - dx*COLS, y = ty - dy*ROWS;
+  if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return false;
+  return !SOLID.has(B.grid[y][x]) && !B.portalAt[y*COLS + x];
+}
 function canStand(x,y){
   const r = 0.27;
-  return walk(Math.floor(x-r),Math.floor(y-r)) && walk(Math.floor(x+r),Math.floor(y-r)) &&
-         walk(Math.floor(x-r),Math.floor(y+r)) && walk(Math.floor(x+r),Math.floor(y+r));
+  return walkW(Math.floor(x-r),Math.floor(y-r)) && walkW(Math.floor(x+r),Math.floor(y-r)) &&
+         walkW(Math.floor(x-r),Math.floor(y+r)) && walkW(Math.floor(x+r),Math.floor(y+r));
+}
+// 端を越えたら、となりのマップへ（画面はつながったまま）
+function crossEdge(){
+  const p = G.p;
+  const dx = p.x < 0 ? -1 : p.x >= COLS ? 1 : 0, dy = p.y < 0 ? -1 : p.y >= ROWS ? 1 : 0;
+  if (!dx && !dy) return;
+  const k = worldNb(G.A.key, dx, dy); if (!k) return;
+  G.A = getArea(k);
+  p.x -= dx*COLS; p.y -= dy*ROWS; p.path = [];
+  p.lastTile = Math.floor(p.y)*COLS + Math.floor(p.x);
+  G.cross = {dx, dy, t: performance.now()};
+  CAM2.x -= dx*COLS*T; CAM2.y -= dy*ROWS*T; CAM2.area = k;
+  G.locT0 = performance.now();
+  if (G.state === 'normal') bannerSubArea();
 }
 function bfs(sx, sy, gx, gy){
   if (!walk(gx,gy)) return null;
@@ -2551,6 +2771,7 @@ function movePlayer(dt){
   }
   const tried = keys.up || keys.down || keys.left || keys.right || stick.x || stick.y || p.path.length;
   p.pushing = !!tried && Math.hypot(p.x-ox, p.y-oy) < 0.3*dt;
+  crossEdge();
   // 出入口・階段・エレベーター
   const tk = Math.floor(p.y)*COLS + Math.floor(p.x);
   if (tk !== p.lastTile){
@@ -2904,7 +3125,11 @@ function drawTile(A, c, x, y){
         }
       } else {
         const ks = A.kStyle;
-        if (ks === 'arcade'){
+        if (ks === 'tank'){
+          ctx.fillStyle = '#b0bec5'; ctx.beginPath(); ctx.arc(X+T/2, Y+T/2, T/2-1, 0, 7); ctx.fill();
+          ctx.strokeStyle = '#78909c'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(X+T/2, Y+T/2, T/2-5, 0, 7); ctx.stroke(); ctx.lineWidth = 1;
+          ctx.fillStyle = '#e53935'; ctx.font = 'bold 7px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('火気厳禁', X+T/2, Y+T/2+3);
+        } else if (ks === 'arcade'){
           const glow = ['#00e5ff','#ff4081','#76ff03','#ffea00'][(x+y)%4];
           ctx.fillStyle = '#212121'; rr(X+2,Y+1,T-4,T-3,3); ctx.fill();
           ctx.fillStyle = glow; ctx.globalAlpha = .55 + Math.sin(performance.now()/200 + x)*.25; ctx.fillRect(X+5,Y+4,T-10,12); ctx.globalAlpha = 1;
@@ -3147,6 +3372,7 @@ function drawTile(A, c, x, y){
         ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(X+8+((x*5)%14), Y+10+Math.sin(performance.now()/600+x)*3, 4, 0, 7); ctx.fill();
         break;
       }
+      if (A.key === 'farmland'){ ctx.fillStyle = '#6f9f7a'; ctx.fillRect(X,Y,T,T); ctx.strokeStyle = 'rgba(200,230,150,.7)'; for (let i=0;i<4;i++){ ctx.beginPath(); ctx.moveTo(X+4+i*8, Y+4); ctx.lineTo(X+4+i*8, Y+T-4); ctx.stroke(); } break; }
       if (A.key === 'park'){ ctx.fillStyle = '#4f9bc7'; ctx.fillRect(X,Y,T,T); ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(X+6, Y+12+Math.sin(performance.now()/500+x)*2, 10, 2); break; }
       ctx.fillStyle = '#2b7bb9'; ctx.fillRect(X,Y,T,T);
       ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.beginPath();
@@ -3184,6 +3410,9 @@ const THEME = {
   amusement:{floorStyle:'sidewalk', bStyle:'attraction', vStyle:'lamp'}, museum:{floorStyle:'wood', wood:'#b89470'},
   livehouse:{floorStyle:'carpet', carpet:'#2b2533'}, nursery:{floorStyle:'wood', wood:'#e5c38f', dStyle:'kids', zStyle:'futon'},
   arcade:{floorStyle:'carpet', carpet:'#2a1f3d'}, camp:{cStyle:'tent'}, port:{bStyle:'evac'},
+  stationFront:{floorStyle:'sidewalk', bStyle:'school'}, hillside:{bStyle:'house'}, riverside:{floorStyle:'sidewalk'}, farmland:{bStyle:'house'},
+  shoppingSt:{floorStyle:'sidewalk', bStyle:'city'}, officeDist:{floorStyle:'sidewalk', bStyle:'city'}, hospitalFront:{floorStyle:'sidewalk', bStyle:'school'},
+  industrial:{floorStyle:'concrete', bStyle:'store'},
 };
 for (const k in THEME) Object.assign(AREAS[k], THEME[k]);
 
@@ -3599,6 +3828,20 @@ function drawStar(cx, cy, r){
   for (let i=0;i<10;i++){ const a = -Math.PI/2 + i*Math.PI/5, rr2 = i%2 ? r*.45 : r; ctx.lineTo(cx+Math.cos(a)*rr2, cy+Math.sin(a)*rr2); }
   ctx.closePath(); ctx.fill();
 }
+// となりのマップは一度だけ描いて、絵として使い回す（重くならないように）
+const chunkCache = {};
+function chunkImage(k){
+  if (chunkCache[k]) return chunkCache[k];
+  const c = document.createElement('canvas'); c.width = COLS*T; c.height = ROWS*T;
+  const old = ctx, oldState = G.state, B = getArea(k);
+  ctx = c.getContext('2d'); G.state = 'normal';
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) drawTile(B, B.grid[y][x], x, y);
+  drawDecor(B);
+  ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+  for (const l of B.labels || []) if (!PORTAL_LABEL_RE.test(l.t)) tag(l.x*T, l.y*T + 1, l.t, 'rgba(0,0,0,.45)');
+  G.state = oldState; ctx = old;
+  return chunkCache[k] = c;
+}
 // ====== 2D のカメラ：自分を中心に拡大して追いかける（結果を見るときはマップ全体） ======
 const ZOOM2D = 1.8;
 const CAM2 = {x: COLS*T/2, y: ROWS*T/2, z: 1, area: null};
@@ -3614,10 +3857,12 @@ function updateCam2D(p, st){
   CAM2.area = G.A && G.A.key;
   CAM2.z = snap ? z : CAM2.z + (z - CAM2.z)*.08;
   const zz = CAM2.z, tx = p ? p.x*T : MW/2, ty = p ? p.y*T : MH/2;
-  const cl = (v, half, full) => full <= half*2 ? full/2 : clamp(v, half, full - half);
-  const cx = cl(tx, SW/(2*zz), MW), cy = cl(ty, SH/(2*zz), MH);
+  // となりのマップがある側はカメラを止めない（シームレスに見える）
+  const k = G.A && G.A.key, open = {l: !!worldNb(k, -1, 0), r: !!worldNb(k, 1, 0), u: !!worldNb(k, 0, -1), d: !!worldNb(k, 0, 1)};
+  const cl = (v, half, full, lo, hi) => (lo && hi) ? v : full <= half*2 && !lo && !hi ? full/2 : clamp(v, lo ? -1e9 : half, hi ? 1e9 : full - half);
+  const cx = cl(tx, SW/(2*zz), MW, open.l, open.r), cy = cl(ty, SH/(2*zz), MH, open.u, open.d);
   if (snap){ CAM2.x = cx; CAM2.y = cy; } else { CAM2.x += (cx - CAM2.x)*.18; CAM2.y += (cy - CAM2.y)*.18; }
-  CAM2.x = cl(CAM2.x, SW/(2*zz), MW); CAM2.y = cl(CAM2.y, SH/(2*zz), MH);
+  CAM2.x = cl(CAM2.x, SW/(2*zz), MW, open.l, open.r); CAM2.y = cl(CAM2.y, SH/(2*zz), MH, open.u, open.d);
 }
 function applyCam2D(){ ctx.translate(SW/2, SH/2); ctx.scale(CAM2.z, CAM2.z); ctx.translate(-CAM2.x, -CAM2.y); }
 function draw(now){
@@ -3628,6 +3873,12 @@ function draw(now){
   ctx.save();
   updateCam2D(p, st);
   applyCam2D();
+  // となりのマップ（あらかじめ描いておいた絵）
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){
+    if (!dx && !dy) continue;
+    const k = worldNb(A.key, dx, dy); if (!k) continue;
+    ctx.drawImage(chunkImage(k), dx*COLS*T, dy*ROWS*T, COLS*T, ROWS*T);
+  }
   if (G.shakeAmt > 0) ctx.translate(rand(-1,1)*G.shakeAmt, rand(-1,1)*G.shakeAmt);
   for (let y=0;y<ROWS;y++) for (let x=0;x<COLS;x++) drawTile(A, A.grid[y][x], x, y);
   drawDecor(A);
@@ -4424,6 +4675,39 @@ function buildArea(A){
   W3.green = new THREE.Group(); W3.green.visible = false; grp.add(W3.green);
   W3.greenFor = null;
 }
+// ====== となりのマップ（簡易版の立体。シームレスに見せる） ======
+const NB3 = {};
+function buildLite(A){
+  const grp = new THREE.Group();
+  const top = paintArea(A, true);
+  const tm = new THREE.MeshLambertMaterial({map: top.tex});
+  const gp = new THREE.Mesh(new THREE.PlaneGeometry(COLS, ROWS), tm);
+  gp.rotation.x = -Math.PI/2; gp.position.set(COLS/2, 0, ROWS/2); gp.receiveShadow = true; grp.add(gp);
+  const img = top.canvas.getContext('2d').getImageData(0, 0, top.canvas.width, top.canvas.height);
+  const sideMats = {};
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++){
+    const ch = A.grid[y][x];
+    if (!'#BFWSKVTCN'.includes(ch)) continue;
+    if (ch === 'B' && A.bStyle === 'shrine') continue;
+    let h = ch === 'W' ? 1.25 : ch === 'T' ? 1.9 : tileHeight(A, ch, x, y);
+    const key = ch + (ch === '#' ? '' : x + ',' + y);
+    const side = sideMats[key] || (sideMats[key] = new THREE.MeshLambertMaterial({color: tileColor(img, x, y)}));
+    if (ch === 'T'){ const lf = new THREE.Mesh(new THREE.SphereGeometry(.55, 8, 6), new THREE.MeshLambertMaterial({color: 0x33691e})); lf.position.set(x + .5, 1.45, y + .5); grp.add(lf); continue; }
+    const geo = new THREE.BoxGeometry(1, h, 1); topMapped(geo, x + .5, y + .5);
+    const me = new THREE.Mesh(geo, [side, side, tm, side, side, side]); me.position.set(x + .5, h/2, y + .5); grp.add(me);
+  }
+  return grp;
+}
+function updateNeighbors3D(A){
+  const used = new Set();
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++){
+    if (!dx && !dy) continue;
+    const k = worldNb(A.key, dx, dy); if (!k) continue;
+    let g = NB3[k]; if (!g){ g = NB3[k] = buildLite(getArea(k)); R3.scene.add(g); }
+    g.position.set(dx*COLS, 0, dy*ROWS); g.visible = true; used.add(k);
+  }
+  for (const k in NB3) if (!used.has(k)) NB3[k].visible = false;
+}
 // 大きな装飾（鳥居・本殿・観覧車・ステージ・電車・船・避難タワー・パラソル）
 function buildDecor3D(A, grp){
   const k = A.key;
@@ -4603,7 +4887,11 @@ function draw3D(now, dt){
   }
   const A = G.A, p = G.p;
   const wantKey = A.key + ':' + (G.seed || 0);
-  if (W3.key !== wantKey) buildArea(A);
+  if (W3.key !== wantKey){
+    buildArea(A); updateNeighbors3D(A);
+    // 端を越えてとなりのマップに来たときは、カメラもずらしてつながって見せる
+    if (G.cross && !G.cross.done){ G.cross.done = true; R.camera.position.x -= G.cross.dx*COLS; R.camera.position.z -= G.cross.dy*ROWS; }
+  }
   if (drawTransit3D(now, dt)) return;
   if (R.camera.fov !== 48){ R.camera.fov = 48; R.camera.updateProjectionMatrix(); }
   if (W3.group) W3.group.visible = true;

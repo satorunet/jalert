@@ -13,7 +13,8 @@ const SCENES = ['home', 'school', 'town', 'station', 'super', 'office', 'bedroom
   'hospital', 'theater', 'gym', 'konbini', 'beach', 'mansion', 'library', 'restaurant', 'warehouse', 'shrine',
   'townNight', 'konbiniNight', 'hospitalNight',
   'train', 'trainNight', 'airport', 'park', 'hotelNight', 'stadium', 'sento',
-  'mall', 'ugParking', 'subway', 'port', 'amusement', 'camp', 'museum', 'livehouse', 'nursery', 'arcade'];
+  'mall', 'ugParking', 'subway', 'port', 'amusement', 'camp', 'museum', 'livehouse', 'nursery', 'arcade',
+  'stationFront', 'hillside', 'riverside', 'farmland', 'shoppingSt', 'officeDist', 'hospitalFront', 'industrial'];
 // 地震は震度ごとに猶予（秒）と揺れの長さを変える。震度7は直下型で猶予が短い
 const SHINDO = [
   { s: '5強', w: 0.2,  limit: 11,  post: 4 },
