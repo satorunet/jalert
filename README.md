@@ -23,7 +23,9 @@
 ## 構成
 
 ```
-index.html        ゲーム本体（HTML/CSS/JS 1ファイル）
+index.html        ゲーム本体（HTML/CSS/JS）
+synth.js          警報音の試作（ブラウザ内合成）
+sound-lab.html    警報音ラボ（本物と試作音の聞き比べ）
 og.png            OGP画像
 server/server.js  ラウンド配信・位置共有・ランキングの WebSocket サーバ（Node.js + ws）
 sounds/           警報音を置く場所（同梱なし。sounds/README.md）
@@ -62,8 +64,28 @@ server {
 
 サーバに接続できない場合は、ブラウザ内だけで同じルールのラウンドが続きます（オフライン）。
 
+## 警報音について（出典）
+
+警報音の音声ファイルは **このリポジトリには含めていません**。
+alert.satoru.net の「実際の音」では、上越市が公開している音声を使用しています。
+
+- 出典：上越市「[デジタル防災行政無線（同報系）システム](https://www.city.joetsu.niigata.jp/soshiki/kikikanri/dentatsu.html)」
+  - [緊急地震速報（mp3）](https://www.city.joetsu.niigata.jp/uploaded/attachment/60628.mp3) → `sounds/eew.mp3`
+  - [国民保護情報（mp3）](https://www.city.joetsu.niigata.jp/uploaded/attachment/60632.mp3) → `sounds/missile.mp3`
+
+音声の権利は出典元に帰属し、MIT License の対象外です。配置方法は [sounds/README.md](sounds/README.md) を参照してください。
+
+### 試作音（synth.js）
+
+実際の警報音に**似せた別の音**を、録音を使わずブラウザで合成しています（MIT）。
+音声ファイルが無い場合や、ゲーム内の ☰ メニュー「警報音」で「試作A/B/C」を選んだ場合に使われます。
+`sound-lab.html` で本物と聞き比べられます（▶ https://alert.satoru.net/sound-lab.html ）。
+
+| | 試作A | 試作B | 試作C |
+|---|---|---|---|
+| 緊急地震速報 | 鐘型チャイム | 上昇アルペジオ | 携帯の緊急速報風 |
+| ミサイル | うなりサイレン | モーターサイレン | 高低交互サイレン |
+
 ## ライセンス
 
-[MIT License](LICENSE) © 2026 satoru.net
-
-警報音の音声ファイルは含まれていません（第三者の権利物のため）。
+[MIT License](LICENSE) © 2026 satoru.net（警報音の音声ファイルは対象外・同梱なし）

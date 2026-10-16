@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>警報音ラボ｜緊急速報シミュレーター</title>
+<meta name="robots" content="noindex">
+<style>
+:root{--bg:#0f131a;--panel:#1a2130;--panel2:#232c3e;--text:#eef2f7;--muted:#9aa6b8;--red:#d32f2f;--accent:#ffca28}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+main{max-width:860px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:22px;margin:0 0 4px}
+h1 span{color:var(--accent)}
+.lead{color:var(--muted);font-size:14px;line-height:1.6;margin:0 0 14px}
+.warn{background:#3a2a10;border-left:4px solid var(--accent);padding:8px 12px;border-radius:6px;font-size:13px;color:#ffe9b0;margin-bottom:16px}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:18px}
+.bar label{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px}
+button{font:inherit;cursor:pointer;border:none;border-radius:10px;color:var(--text);background:var(--panel2)}
+.stop{padding:10px 16px;font-weight:800;background:#455a64}
+h2{font-size:17px;margin:22px 0 10px;display:flex;align-items:center;gap:8px}
+h2 .tag{font-size:11px;padding:2px 8px;border-radius:99px;background:#b71c1c}
+h2 .tag.ms{background:#212121;border:1px solid #ff1744}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.card{background:var(--panel);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px;border:2px solid transparent}
+.card.playing{border-color:var(--accent)}
+.card .t{font-weight:800}
+.card .t small{color:var(--muted);font-weight:600;margin-left:6px}
+.card p{margin:0;font-size:13px;color:var(--muted);line-height:1.5;flex:1}
+.card button{padding:10px;font-weight:800;background:var(--red)}
+.card.real button{background:#1565c0}
+.card .na{font-size:12px;color:#ef9a9a}
+canvas{width:100%;height:80px;background:#0b0f16;border-radius:10px;margin-top:6px}
+a{color:#90caf9}
+</style>
+</head>
+<body>
+<main>
+  <h1>🔊 警報音ラボ <span>試作</span></h1>
+  <p class="lead">実際の警報音に<b>似せた別の音</b>を、ブラウザで合成して試作しています（録音データは使っていません）。本物と聞き比べて、ゲームで使う音を選べます。</p>
+  <div class="warn">⚠️ 大きな警報音が鳴ります。周りの人が本物の警報と間違えないよう、音量に注意してください。これは訓練用の音です。</div>
+
+  <div class="bar">
+    <label>音量 <input type="range" id="vol" min="0" max="1" step="0.05" value="0.6"></label>
+    <label><input type="checkbox" id="tts" checked> 読み上げ音声も流す</label>
+    <button class="stop" id="stop">■ 停止</button>
+  </div>
+  <canvas id="scope" width="1600" height="160"></canvas>
+
+  <h2><span class="tag">地震</span>緊急地震速報</h2>
+  <div class="grid" id="eq"></div>
+
+  <h2><span class="tag ms">ミサイル</span>ミサイル発射情報（国民保護サイレン）</h2>
+  <div class="grid" id="ms"></div>
+
+  <p class="lead" style="margin-top:22px">ゲーム内では ☰ メニューの「警報音」で、実際の音／試作A／B／C を切り替えられます。<br>
+  <a href="./">← 緊急速報シミュレーターへ戻る</a></p>
+</main>
+<script src="synth.js"></script>
+<script>
+(() => {
+  let AC = null, master = null, bus = null, analyser = null, timers = [];
+  const real = {eq: 'sounds/eew.mp3', ms: 'sounds/missile.mp3'}, realBuf = {};
+  const VOICE = {
+    eq: ['緊急地震速報。強い揺れに警戒してください。', '緊急地震速報。身の安全を確保してください。'],
+    ms: ['ミサイル発射。ミサイル発射。ミサイルが発射されたものとみられます。建物の中、または地下に避難してください。'],
+  };
+  function init(){
+    if (!AC){
+      AC = new (window.AudioContext || window.webkitAudioContext)();
+      master = AC.createGain(); analyser = AC.createAnalyser(); analyser.fftSize = 2048;
+      master.connect(analyser).connect(AC.destination);
+      master.gain.value = +document.getElementById('vol').value;
+      draw();
+    }
+    if (AC.state === 'suspended') AC.resume();
+  }
+  function stop(){
+    timers.forEach(clearTimeout); timers = [];
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    if (bus){ const b = bus; b.gain.setValueAtTime(b.gain.value, AC.currentTime); b.gain.linearRampToValueAtTime(0, AC.currentTime + 0.15); setTimeout(() => b.disconnect(), 300); }
+    bus = null;
+    document.querySelectorAll('.card.playing').forEach(c => c.classList.remove('playing'));
+  }
+  function speakLater(kind, ms){
+    if (!document.getElementById('tts').checked || !('speechSynthesis' in window)) return;
+    VOICE[kind].forEach((txt, i) => timers.push(setTimeout(() => {
+      const u = new SpeechSynthesisUtterance(txt); u.lang = 'ja-JP'; u.rate = kind === 'ms' ? 1.15 : 1.05;
+      const v = speechSynthesis.getVoices().find(v => /ja[-_]JP/i.test(v.lang)); if (v) u.voice = v;
+      speechSynthesis.speak(u);
+    }, ms + i*3500)));
+  }
+  async function playReal(kind, card){
+    init(); stop(); bus = AC.createGain(); bus.connect(master);
+    if (!realBuf[kind]){
+      try { const r = await fetch(real[kind]); if (!r.ok) throw 0; realBuf[kind] = await AC.decodeAudioData(await r.arrayBuffer()); }
+      catch(e){ card.querySelector('.na').textContent = 'このサーバーには実際の音声ファイルがありません'; return; }
+    }
+    const s = AC.createBufferSource(); s.buffer = realBuf[kind]; s.connect(bus); s.start();
+    card.classList.add('playing');
+    timers.push(setTimeout(() => card.classList.remove('playing'), realBuf[kind].duration*1000));
+  }
+  function playSynth(kind, key, card){
+    init(); stop(); bus = AC.createGain(); bus.connect(master);
+    const dur = AlertSynth[kind === 'eq' ? 'EQ' : 'MS'][key].play(AC, bus);
+    card.classList.add('playing');
+    speakLater(kind, (kind === 'ms' ? Math.min(dur, 4.5) : dur) * 1000 + 200);
+    timers.push(setTimeout(() => card.classList.remove('playing'), dur*1000 + (document.getElementById('tts').checked ? 6000 : 0)));
+  }
+  function build(kind){
+    const box = document.getElementById(kind);
+    const realCard = document.createElement('div');
+    realCard.className = 'card real';
+    realCard.innerHTML = `<div class="t">実際の音<small>上越市 公開音声</small></div><p>比較用。<a href="https://www.city.joetsu.niigata.jp/soshiki/kikikanri/dentatsu.html" target="_blank" rel="noopener">出典：上越市 デジタル防災行政無線</a></p><div class="na"></div><button>▶ 再生</button>`;
+    realCard.querySelector('button').onclick = () => playReal(kind, realCard);
+    box.appendChild(realCard);
+    const set = AlertSynth[kind === 'eq' ? 'EQ' : 'MS'];
+    for (const key of Object.keys(set)){
+      const c = document.createElement('div'); c.className = 'card';
+      c.innerHTML = `<div class="t">試作${key}<small>${set[key].name}</small></div><p>${set[key].desc}</p><button>▶ 再生</button>`;
+      c.querySelector('button').onclick = () => playSynth(kind, key, c);
+      box.appendChild(c);
+    }
+  }
+  function draw(){
+    const cv = document.getElementById('scope'), ctx = cv.getContext('2d'), buf = new Uint8Array(analyser.fftSize);
+    (function loop(){
+      analyser.getByteTimeDomainData(buf);
+      ctx.fillStyle = '#0b0f16'; ctx.fillRect(0, 0, cv.width, cv.height);
+      ctx.strokeStyle = '#ffca28'; ctx.lineWidth = 3; ctx.beginPath();
+      for (let i = 0; i < buf.length; i++){ const x = i/buf.length*cv.width, y = buf[i]/255*cv.height; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.stroke(); requestAnimationFrame(loop);
+    })();
+  }
+  build('eq'); build('ms');
+  document.getElementById('stop').onclick = stop;
+  document.getElementById('vol').oninput = e => { if (master) master.gain.value = +e.target.value; };
+})();
+</script>
+</body>
+</html>
