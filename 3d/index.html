@@ -70,6 +70,9 @@ button:active{transform:scale(.97)}
 #cv,#gl{position:absolute;inset:0;width:100%!important;height:100%!important;display:block;touch-action:none}
 #gl{z-index:0}
 #cv{z-index:1}
+/* 3D 版：ゲーム画面を大きく（比率を固定せず、空いている場所いっぱいに） */
+#app{max-width:1600px!important}
+#stage{width:100%!important;height:100%!important;aspect-ratio:auto!important}
 
 #banner{flex:none;height:var(--banH);border-radius:10px;overflow:hidden;pointer-events:none;background:var(--panel);display:flex;flex-direction:column}
 #banner .bar{flex:1}
@@ -2111,7 +2114,7 @@ function judgeNPCs(){
 function bubble(X, Y, text){
   ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
   const w = Math.min(150, ctx.measureText(text).width + 12);
-  const bx = clamp(X - w/2, 2, COLS*T - w - 2), by = Y - 34;
+  const bx = clamp(X - w/2, 2, SW - w - 2), by = Y - 34;
   ctx.fillStyle = 'rgba(255,255,255,.95)'; rr(bx, by, w, 18, 6); ctx.fill();
   ctx.beginPath(); ctx.moveTo(X-4, by+18); ctx.lineTo(X+4, by+18); ctx.lineTo(X, by+24); ctx.closePath(); ctx.fill();
   ctx.fillStyle = '#111'; ctx.fillText(text.length > 22 ? text.slice(0,21)+'…' : text, bx + w/2, by + 13);
@@ -3803,7 +3806,7 @@ function drawVerdict(){
   const t = (nowMs() - f.t0)/1000;
   if (t < 0.7) return;
   const a = clamp((t-0.7)/0.4, 0, 1);
-  const W = COLS*T, H = ROWS*T;
+  const W = SW, H = SH;
   ctx.fillStyle = f.alive ? `rgba(0,40,10,${.35*a})` : `rgba(70,0,0,${.5*a})`;
   ctx.fillRect(0,0,W,H);
   ctx.save();
@@ -3869,7 +3872,7 @@ function drawLocation(){
     ctx.textAlign = 'center';
     ctx.font = 'bold 26px sans-serif';
     const tw = ctx.measureText(name).width + 60;
-    const cx = COLS*T/2, cy = ROWS*T*0.22;
+    const cx = SW/2, cy = SH*0.22;
     ctx.fillStyle = 'rgba(0,0,0,.6)'; rr(cx - tw/2, cy - 26, tw, 52, 10); ctx.fill();
     ctx.fillStyle = kc; ctx.fillRect(cx - tw/2 + 12, cy + 17, tw - 24, 2);
     ctx.fillStyle = '#fff'; ctx.fillText(name, cx, cy - 2);
@@ -3879,7 +3882,7 @@ function drawLocation(){
   ctx.restore();
 }
 function drawTitleBg(now){
-  const W = COLS*T, H = ROWS*T;
+  const W = SW, H = SH;
   const g = ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#1c2a44'); g.addColorStop(1,'#0b0f17');
   ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
   ctx.fillStyle = '#263248';
@@ -4042,6 +4045,7 @@ function confirmJoin(){
 // =====================================================================
 // ====== 3D 表示（ゲームの中身は 2D 版と共通。描画だけを three.js に） ======
 // =====================================================================
+let SW = 640, SH = 416;   // 重ね表示（名札・吹き出しなど）の論理サイズ。画面の形に合わせて変わる
 const R3 = (() => {
   const stage = $('stage');
   const renderer = new THREE.WebGLRenderer({antialias:true});
@@ -4067,6 +4071,8 @@ const R3 = (() => {
     if (!r.width) return;
     renderer.setSize(r.width, r.height, false);
     camera.aspect = r.width / r.height; camera.updateProjectionMatrix();
+    SW = r.width < 700 ? Math.round(Math.max(320, r.width)) : Math.round(r.width/1.25); SH = Math.round(SW * r.height / r.width);
+    cv.width = SW*DPR; cv.height = SH*DPR;
   }
   new ResizeObserver(resize).observe(stage); resize();
   return {renderer, scene, camera, hemi, sun, alarm, torch};
@@ -4140,7 +4146,7 @@ function buildArea(A){
   const R = R3;
   if (W3.group) R.scene.remove(W3.group);
   const grp = new THREE.Group(); R.scene.add(grp);
-  Object.assign(W3, {key: A.key + ':' + (G.seed || 0), group: grp, furn: [], panes: [], lamps: [], swing: [], water: null, rubble: null, green: null, stars: []});
+  Object.assign(W3, {key: A.key + ':' + (G.seed || 0), group: grp, furn: [], panes: [], lamps: [], swing: [], water: null, rubble: null, green: null, stars: [], torii: null, wheel: null});
   const ground = paintArea(A, false), top = paintArea(A, true);
   const img = top.canvas.getContext('2d').getImageData(0, 0, top.canvas.width, top.canvas.height);
   const gm = new THREE.MeshStandardMaterial({map: ground.tex, roughness: .9});
@@ -4310,15 +4316,18 @@ function buildDecor3D(A, grp){
     const body = bx(7.6, 1.6, 2.6, m3(0x6d4c41)); body.position.set(10, .8, 1.5); grp.add(body);
     const wallw = bx(6.6, 1.1, .05, m3(0xf5ecd7)); wallw.position.set(10, .8, 2.82); grp.add(wallw);
     for (let i = 0; i < 5; i++){ const p = cyl(.08, .08, 1.7, m3(0xc62828)); p.position.set(7 + i*1.5, .85, 2.85); grp.add(p); }
-    const roof = new THREE.Mesh(new THREE.CylinderGeometry(0, 5.2, 1.6, 4, 1), m3(0x3e2723));
-    roof.position.set(10, 2.4, 1.5); roof.rotation.y = Math.PI/4; roof.scale.set(1, 1, .45); roof.castShadow = true; grp.add(roof);
+    const sh = new THREE.Shape(); sh.moveTo(-1.9, 0); sh.lineTo(0, 1.15); sh.lineTo(1.9, 0); sh.lineTo(1.6, -.12); sh.lineTo(0, .9); sh.lineTo(-1.6, -.12); sh.closePath();
+    const roof = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, {depth: 8.6, bevelEnabled: false}), m3(0x3e2723));
+    roof.rotation.y = Math.PI/2; roof.position.set(5.7, 1.6, 1.5); roof.castShadow = true; grp.add(roof);
     const rope = cyl(.05, .05, 6.4, m3(0xd7c49e)); rope.rotation.z = Math.PI/2; rope.position.set(10, 1.55, 2.95); grp.add(rope);
     // 鳥居
     const red = m3(0xd84315);
-    for (const px of [7.5, 12.5]){ const p = cyl(.14, .16, 2.7, red); p.position.set(px, 1.35, 10.5); grp.add(p); }
-    const nuki = bx(6.2, .16, .16, red); nuki.position.set(10, 2.25, 10.5); grp.add(nuki);
-    const kasa = bx(7.2, .2, .32, m3(0x212121)); kasa.position.set(10, 2.75, 10.5); grp.add(kasa);
-    const kasa2 = bx(6.8, .12, .26, red); kasa2.position.set(10, 2.6, 10.5); grp.add(kasa2);
+    const torii = new THREE.Group(); torii.position.set(10, 0, 10.5);
+    for (const px of [-2.5, 2.5]){ const p = cyl(.14, .16, 2.7, red); p.position.set(px, 1.35, 0); torii.add(p); }
+    const nuki = bx(6.2, .16, .16, red); nuki.position.set(0, 2.25, 0); torii.add(nuki);
+    const kasa = bx(7.2, .2, .32, m3(0x212121)); kasa.position.set(0, 2.75, 0); torii.add(kasa);
+    const kasa2 = bx(6.8, .12, .26, red); kasa2.position.set(0, 2.6, 0); torii.add(kasa2);
+    grp.add(torii); W3.torii = torii;
   }
   if (k === 'amusement'){
     const wheel = new THREE.Group(); wheel.position.set(4, 3.4, 1.4);
@@ -4463,14 +4472,14 @@ const fallRocks = [];
 function proj(x, h, z){
   V3.set(x, h, z).project(R3.camera);
   if (V3.z > 1) return null;
-  return {X: (V3.x + 1)/2 * COLS*T, Y: (1 - V3.y)/2 * ROWS*T};
+  return {X: (V3.x + 1)/2 * SW, Y: (1 - V3.y)/2 * SH};
 }
 
 let lastAreaTex = 0;
 function draw3D(now, dt){
   const R = R3, st = G.state;
   ctx.setTransform(DPR,0,0,DPR,0,0);
-  ctx.clearRect(0, 0, COLS*T, ROWS*T);
+  ctx.clearRect(0, 0, SW, SH);
   if (!G.A){
     R.renderer.setClearColor(0x0b0f17); R.renderer.clear();
     drawTitleBg(now);
@@ -4479,6 +4488,9 @@ function draw3D(now, dt){
   const A = G.A, p = G.p;
   const wantKey = A.key + ':' + (G.seed || 0);
   if (W3.key !== wantKey) buildArea(A);
+  if (drawTransit3D(now, dt)) return;
+  if (W3.group) W3.group.visible = true;
+  pts3.visible = true;
   // ---- 明るさ（屋外・屋内・夜・薄暗い） ----
   const night = G.scene && G.scene.night;
   const base = A.indoor ? .78 : 1.0;
@@ -4498,7 +4510,21 @@ function draw3D(now, dt){
     if (f.fixed && G.L <= 2 && st === 'shake') ang *= .12;
     f.pivot.rotation.x = st === 'shake' || st === 'after' || st === 'result' ? (st === 'shake' ? ang : f.pivot.rotation.x) : 0;
   }
-  for (const s of W3.swing) s.g.rotation.x = st === 'shake' && k > 1 ? Math.sin(k*10 + s.x)*.12*(1 + G.L*.3) : 0;
+  const boomT = G.boomT ? (nowMs() - G.boomT)/1000 : -1;
+  for (const s of W3.swing){
+    // ミサイルの爆風では塀・灯籠・街灯などが倒れる
+    if (boomT >= 0) s.g.rotation.x = Math.min(1.5, boomT*2.2) * ((s.x + s.y) % 2 ? 1 : .8);
+    else if (st === 'shake') s.g.rotation.x = k > 1 ? Math.sin(k*10 + s.x)*.12*(1 + G.L*.3) + (G.L >= 2 && k > 2.4 ? Math.min(1.4, (k - 2.4)*.8) : 0) : 0;
+    else if (st !== 'after' && st !== 'result') s.g.rotation.x = 0;
+  }
+  if (W3.torii){
+    // 鳥居：爆風で倒れる／大地震でも倒れる
+    let r = 0;
+    if (boomT >= 0) r = Math.min(1.5, Math.pow(Math.max(0, boomT - .05)*1.6, 1.6));
+    else if (st === 'shake') r = Math.sin(k*8)*.04 + (G.L >= 2 && k > 2.2 ? Math.min(1.5, (k - 2.2)*.7) : 0);
+    else if (st === 'after' || st === 'result') r = W3.torii.rotation.x;
+    W3.torii.rotation.x = r;
+  }
   for (const l of W3.lamps){ if (l.fire){ l.mesh.scale.y = 1 + Math.sin(now/90)*.15; continue; } l.mesh.rotation.z = st === 'shake' ? Math.sin(k*9 + l.x)*.35*(1 + G.L*.4) : Math.sin(now/1500 + l.x)*.02; }
   // 窓ガラスが割れる
   const breakPane = pn => { if (pn.broken) return; pn.broken = true; pn.mesh.visible = false; for (let i = 0; i < 6; i++) spawn(pn.x - .5 + Math.random(), pn.z - .5 + Math.random(), (Math.random()-.5)*3, (Math.random()-.5)*3, 'rgba(200,240,255,.95)', 3, .8 + Math.random()*.6); };
@@ -4627,29 +4653,29 @@ function draw3D(now, dt){
   // 死んだときの画面（赤く暗く）
   if (G.res && !G.res.alive && fxT > .45 && (st === 'shake' || st === 'pass' || st === 'after')){
     const a = clamp((fxT - .45)/1.2, 0, 1);
-    const g = ctx.createRadialGradient(COLS*T/2, ROWS*T/2, 60, COLS*T/2, ROWS*T/2, 380);
+    const g = ctx.createRadialGradient(SW/2, SH/2, 60, SW/2, SH/2, 380);
     g.addColorStop(0, `rgba(40,0,0,${a*.15})`); g.addColorStop(1, `rgba(20,0,0,${a*.75})`);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, COLS*T, ROWS*T);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, SW, SH);
   }
   // 移動中（階段・エレベーター）
   if (p && p.transit){
-    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0,0,COLS*T,ROWS*T);
+    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0,0,SW,SH);
     const left = Math.max(0, (p.transit.until - nowMs())/1000);
     ctx.fillStyle = '#fff'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(p.stuck ? (p.transit.kind === 'elevator' ? 'エレベーター緊急停止！' : '階段で揺れに遭遇！') : (p.transit.kind === 'elevator' ? 'エレベーターで移動中…' : '階段で移動中…'), COLS*T/2, ROWS*T/2 - 6);
+    ctx.fillText(p.stuck ? (p.transit.kind === 'elevator' ? 'エレベーター緊急停止！' : '階段で揺れに遭遇！') : (p.transit.kind === 'elevator' ? 'エレベーターで移動中…' : '階段で移動中…'), SW/2, SH/2 - 6);
     if (!p.stuck){
-      ctx.font = '14px sans-serif'; ctx.fillText(`→ ${areaName(p.transit.dest.area)}　${left.toFixed(1)}秒`, COLS*T/2, ROWS*T/2 + 20);
-      ctx.fillStyle = '#ffca28'; ctx.fillRect(COLS*T/2-100, ROWS*T/2+32, 200*(1-left/p.transit.dur), 5);
+      ctx.font = '14px sans-serif'; ctx.fillText(`→ ${areaName(p.transit.dest.area)}　${left.toFixed(1)}秒`, SW/2, SH/2 + 20);
+      ctx.fillStyle = '#ffca28'; ctx.fillRect(SW/2-100, SH/2+32, 200*(1-left/p.transit.dur), 5);
     }
   }
   if (st === 'alert' || st === 'shake'){
     const a = (Math.sin(now/120)+1)/2 * (G.type === 'eq' ? .14 : .1);
-    const grd = ctx.createRadialGradient(COLS*T/2, ROWS*T/2, 120, COLS*T/2, ROWS*T/2, 420);
+    const grd = ctx.createRadialGradient(SW/2, SH/2, 120, SW/2, SH/2, 420);
     grd.addColorStop(0, 'rgba(255,0,0,0)'); grd.addColorStop(1, `rgba(255,0,0,${a*3})`);
-    ctx.fillStyle = grd; ctx.fillRect(0,0,COLS*T,ROWS*T);
+    ctx.fillStyle = grd; ctx.fillRect(0,0,SW,SH);
   }
-  if (G.boomT){ const t = (nowMs() - G.boomT)/1000; if (t < .8){ ctx.fillStyle = `rgba(255,250,235,${(1-t/.8)*.95})`; ctx.fillRect(0,0,COLS*T,ROWS*T); } }
-  if (st === 'spectate'){ ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0,0,COLS*T,ROWS*T); tag(COLS*T/2, 24, '見学中（次のラウンドから参加）', 'rgba(0,0,0,.7)'); }
+  if (G.boomT){ const t = (nowMs() - G.boomT)/1000; if (t < .8){ ctx.fillStyle = `rgba(255,250,235,${(1-t/.8)*.95})`; ctx.fillRect(0,0,SW,SH); } }
+  if (st === 'spectate'){ ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0,0,SW,SH); tag(SW/2, 24, '見学中（次のラウンドから参加）', 'rgba(0,0,0,.7)'); }
   drawLocation();
   if (st !== 'result') drawVerdict();
 }
@@ -4674,7 +4700,7 @@ function portalSigns3D(A){
     const s = proj(g.x/g.n, 2.3, g.y/g.n); if (!s) continue;
     ctx.font = 'bold 10px sans-serif';
     const w = ctx.measureText(g.txt).width + 12;
-    const x = clamp(s.X, w/2 + 2, COLS*T - w/2 - 2);
+    const x = clamp(s.X, w/2 + 2, SW - w/2 - 2);
     ctx.fillStyle = 'rgba(27,94,32,.92)'; rr(x - w/2, s.Y - 10, w, 15, 5); ctx.fill();
     ctx.strokeStyle = '#a5d6a7'; ctx.stroke();
     ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(g.txt, x, s.Y + 1);
@@ -4688,6 +4714,130 @@ function tapToTile(e){
   ray3.setFromCamera(ndc3, R3.camera);
   if (!ray3.ray.intersectPlane(plane0, hit3)) return null;
   return {tx: Math.floor(hit3.x), ty: Math.floor(hit3.z)};
+}
+
+// ====== 移動中の専用シーン（階段の吹き抜け・エレベーターのかご） ======
+const TR3 = {stairs:null, elev:null, path:null, len:0};
+function floorOf(key){
+  const A = AREAS[key]; if (!A) return 1;
+  if (A.underground) return -1;
+  const m = /(\d+)階/.exec(areaName(key)); return m ? +m[1] : 1;
+}
+const floorLabel = f => f < 0 ? 'B' + (-f) : f + 'F';
+function buildStairs(){
+  const g = new THREE.Group(); g.visible = false; R3.scene.add(g);
+  const stepM = m3(0x9e9e9e), railM = m3(0xfdd835), wallM = m3(0xcfd2d6), landM = m3(0xb0b4b9);
+  const pts = [];
+  const RUN = .3, RISE = .18, N = 8, LANE = 1.3, FL = 6;
+  for (let i = 0; i < FL; i++){
+    const dir = i % 2 ? -1 : 1, z = i % 2 ? LANE : 0, y0 = -i*N*RISE;
+    const x0 = dir > 0 ? 0 : N*RUN, x1 = dir > 0 ? N*RUN : 0;
+    for (let s = 0; s < N; s++){
+      const st = bx(RUN, .12, 1.1, stepM); st.position.set(x0 + dir*(s + .5)*RUN, y0 - (s + 1)*RISE + .06, z); g.add(st);
+    }
+    const land = bx(1.2, .12, LANE + 1.1, landM); land.position.set(x1 + dir*.6, y0 - N*RISE + .06, LANE/2); g.add(land);
+    const rail = bx(N*RUN, .05, .05, railM); rail.position.set((x0 + x1)/2, y0 - N*RISE/2 + .9, z + (i % 2 ? .55 : -.55)); rail.rotation.z = -dir*Math.atan2(N*RISE, N*RUN); g.add(rail);
+    pts.push(new THREE.Vector3(x0 - dir*.3, y0, z), new THREE.Vector3(x1, y0 - N*RISE, z), new THREE.Vector3(x1 + dir*.6, y0 - N*RISE, z), new THREE.Vector3(x1 + dir*.6, y0 - N*RISE, i % 2 ? 0 : LANE));
+  }
+  const back = bx(N*RUN + 3.4, FL*N*RISE + 4, .1, wallM); back.position.set(N*RUN/2, -FL*N*RISE/2 + 1, -.8); g.add(back);
+  for (let i = 0; i < FL; i += 2){ const sg = bx(.5, .3, .04, m3(0x2e7d32, {emissive:0x1b5e20, emissiveIntensity:.6})); sg.position.set(N*RUN/2, -i*N*RISE + 1.4, -.74); g.add(sg); }
+  const lamp = new THREE.PointLight(0xffffff, .9, 8); g.add(lamp); g.userData.lamp = lamp;
+  TR3.stairs = g;
+  TR3.path = pts;
+  let L = 0; for (let i = 1; i < pts.length; i++) L += pts[i].distanceTo(pts[i-1]);
+  TR3.len = L;
+}
+function stairsPoint(t){
+  const pts = TR3.path; let d = t * TR3.len;
+  for (let i = 1; i < pts.length; i++){
+    const seg = pts[i].distanceTo(pts[i-1]);
+    if (d <= seg) return pts[i-1].clone().lerp(pts[i], d/seg);
+    d -= seg;
+  }
+  return pts[pts.length-1].clone();
+}
+function buildElev(){
+  const g = new THREE.Group(); g.visible = false; R3.scene.add(g);
+  const steel = m3(0xb0bec5, {metalness:.6, roughness:.35}), dark = m3(0x546e7a, {metalness:.5, roughness:.4});
+  const floor = bx(2.2, .1, 2.2, m3(0x6d6058)); floor.position.y = -.05; g.add(floor);
+  const back = bx(2.2, 2.4, .08, steel); back.position.set(0, 1.2, -1.1); g.add(back);
+  const left = bx(.08, 2.4, 2.2, steel); left.position.set(-1.1, 1.2, 0); g.add(left);
+  const right = bx(.08, 2.4, 2.2, steel); right.position.set(1.1, 1.2, 0); g.add(right);
+  const rail = bx(1.9, .05, .05, dark); rail.position.set(0, .9, -1.02); g.add(rail);
+  const panel = bx(.05, .7, .3, m3(0x263238)); panel.position.set(1.05, 1.15, .6); g.add(panel);
+  for (let i = 0; i < 6; i++){ const b = new THREE.Mesh(new THREE.CircleGeometry(.03, 10), m3(0xfff59d, {emissive:0xffca28, emissiveIntensity:.8})); b.position.set(1.02, .95 + (i % 3)*.12, .52 + Math.floor(i/3)*.14); b.rotation.y = -Math.PI/2; g.add(b); }
+  const ceil = bx(1.2, .04, 1.2, m3(0xffffff, {emissive:0xffffff, emissiveIntensity:.8})); ceil.position.set(0, 2.42, 0); g.add(ceil);
+  const light = new THREE.PointLight(0xffffff, 1.1, 6); light.position.set(0, 2.2, 0); g.add(light);
+  const doorL = bx(.6, 2.2, .06, steel), doorR = doorL.clone(); doorL.position.set(-.3, 1.1, 1.1); doorR.position.set(.3, 1.1, 1.1); doorL.visible = doorR.visible = false; g.add(doorL, doorR);
+  g.userData = {light, ceil, doorL, doorR};
+  TR3.elev = g;
+}
+// 移動中は、いつもの場所の代わりにこのシーンを描く。描いたら true
+function drawTransit3D(now, dt){
+  const p = G.p; if (!p || !p.transit) { if (TR3.stairs) TR3.stairs.visible = false; if (TR3.elev) TR3.elev.visible = false; return false; }
+  if (!TR3.stairs){ buildStairs(); buildElev(); }
+  const R = R3, tr = p.transit;
+  const left = Math.max(0, (tr.until - nowMs())/1000), prog = p.stuck ? (tr.stuckProg ?? (tr.stuckProg = 1 - left/tr.dur)) : clamp(1 - left/tr.dur, 0, 1);
+  const f0 = floorOf(G.A.key), f1 = floorOf(tr.dest.area), down = f1 < f0;
+  let cur = Math.round(f0 + (f1 - f0)*prog); if (cur === 0) cur = down ? -1 : 1;
+  if (W3.group) W3.group.visible = false;
+  for (const g of CH3.values()) g.visible = false;
+  marker3.visible = false; starMeshes.forEach(m => m.visible = false); pts3.visible = false;
+  R.hemi.intensity = .5; R.sun.intensity = .2; R.alarm.intensity = 0; R.torch.intensity = 0;
+  R.scene.background.set(0x14181f); R.scene.fog.color.set(0x14181f);
+  let me = CH3.get('me'); if (!me){ me = makeChar3(0xff7043); CH3.set('me', me); }
+  me.visible = true;
+  const shaking = G.state === 'shake' || p.stuck;
+  if (tr.kind === 'elevator'){
+    TR3.stairs.visible = false; const g = TR3.elev; g.visible = true;
+    g.position.set(40, 0, 40);
+    const u = g.userData;
+    const red = !!p.stuck;
+    u.light.color.set(red ? 0xff2a2a : 0xffffff); u.light.intensity = red ? (.6 + Math.sin(now/90)*.4) : 1.1;
+    u.ceil.material.emissive.set(red ? 0x550000 : 0xffffff);
+    g.position.x += shaking ? (Math.random()-.5)*.08 : 0; g.position.y = shaking ? (Math.random()-.5)*.05 : Math.sin(now/300)*.005;
+    me.position.set(g.position.x, g.position.y, 40); me.rotation.y = 0;
+    poseChar3(me, {crouch: p.crouch, walk: 0, dead: false}, dt);
+    R.camera.position.set(40 + .2, 2.6, 43.4); R.camera.lookAt(40, 1, 40);
+  } else {
+    TR3.elev.visible = false; const g = TR3.stairs; g.visible = true;
+    g.position.set(-40, 0, 40);
+    const t = down ? prog : 1 - prog;
+    const pt = stairsPoint(t).add(g.position);
+    const ahead = stairsPoint(Math.min(1, t + (down ? .01 : -.01))).add(g.position);
+    me.position.copy(pt);
+    if (ahead.distanceTo(pt) > 1e-4) me.rotation.y = Math.atan2(ahead.x - pt.x, ahead.z - pt.z);
+    // 揺れで転倒
+    poseChar3(me, {crouch:false, walk: p.stuck ? 0 : now/1000*1.6, dead: !!p.stuck}, dt);
+    g.userData.lamp.position.set(pt.x - g.position.x, pt.y - g.position.y + 2, 1);
+    if (shaking){ g.position.x += (Math.random()-.5)*.1; }
+    R.camera.position.set(pt.x + 1.2, pt.y + 3.4, pt.z + 7.2); R.camera.lookAt(pt.x, pt.y + .3, pt.z + .6);
+  }
+  R.renderer.render(R.scene, R.camera);
+  // 重ね表示：階数・行き先・残り時間
+  ctx.fillStyle = 'rgba(0,0,0,.65)'; rr(SW/2 - 150, 14, 300, 92, 12); ctx.fill();
+  ctx.textAlign = 'center';
+  if (p.stuck){
+    ctx.fillStyle = '#ff5252'; ctx.font = 'bold 22px sans-serif';
+    ctx.fillText(tr.kind === 'elevator' ? '⚠ 緊急停止' : '階段で揺れに遭遇！', SW/2, 48);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif';
+    ctx.fillText(tr.kind === 'elevator' ? `${floorLabel(cur)} と ${floorLabel(cur + (down ? -1 : 1))} の間で止まりました` : 'バランスを崩して転落…', SW/2, 74);
+  } else {
+    ctx.fillStyle = '#ffca28'; ctx.font = 'bold 30px sans-serif';
+    ctx.fillText(`${down ? '▼' : '▲'} ${floorLabel(cur)}`, SW/2, 52);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif';
+    ctx.fillText(`${tr.kind === 'elevator' ? 'エレベーター' : '階段'}　${floorLabel(f0)} → ${floorLabel(f1)}　${areaName(tr.dest.area)}`, SW/2, 76);
+    ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.fillRect(SW/2 - 120, 88, 240, 5);
+    ctx.fillStyle = '#ffca28'; ctx.fillRect(SW/2 - 120, 88, 240*prog, 5);
+  }
+  if (G.state === 'alert' || G.state === 'shake'){
+    const a = (Math.sin(now/120)+1)/2 * .14;
+    const grd = ctx.createRadialGradient(SW/2, SH/2, 120, SW/2, SH/2, 420);
+    grd.addColorStop(0, 'rgba(255,0,0,0)'); grd.addColorStop(1, `rgba(255,0,0,${a*3})`);
+    ctx.fillStyle = grd; ctx.fillRect(0, 0, SW, SH);
+  }
+  drawVerdict();
+  return true;
 }
 
 // ====== ループ ======

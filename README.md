@@ -24,7 +24,9 @@
 
 ```
 index.html        ゲーム本体（2D 版）
-3d/index.html     3D 版（three.js。ゲームの中身は 2D 版と共通、描画だけ 3D）
+3d/index.html     3D 版（build-3d.py で 2D 版から自動生成。直接編集しない）
+build3d/          3D 版の描画部品（r3d.js：3D 表示、transit3d.js：階段・エレベーターのシーン）
+build-3d.py       3D 版を組み立てる（2D 版や build3d/ を直したら python3 build-3d.py）
 synth.js          警報音の試作（ブラウザ内合成）
 sound-lab.html    警報音ラボ（本物と試作音の聞き比べ）
 bust.sh           キャッシュバスター（音声・synth.js を差し替えたら実行）
