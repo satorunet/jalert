@@ -313,9 +313,6 @@ table.rk tr.gap td{text-align:center;color:var(--muted);border:none}
       <div class="dh"><span>メニュー</span><button id="menuClose" aria-label="閉じる">✕</button></div>
       <button class="mi" id="miRank"><span class="ic">🏆</span>ランキング</button>
       <button class="mi" id="miSound"><span class="ic" id="miSoundIc">🔊</span>音<span class="v" id="miSoundV">ON</span></button>
-      <button class="mi" id="miSoundEq"><span class="ic">🚨</span>地震の警報音<span class="v" id="miSoundEqV">試作A</span></button>
-      <button class="mi" id="miSoundMs"><span class="ic">🚀</span>ミサイルの警報音<span class="v" id="miSoundMsV">試作A</span></button>
-      <a class="mi" href="sound-lab.html" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><span class="ic">🎧</span>警報音を試聴する</a>
       <div class="rkh" style="margin-top:8px">あなたの成績</div>
       <div class="mystats" id="myStats"></div>
     </div>
@@ -1308,7 +1305,6 @@ function initAudio(){
     const C = window.AudioContext || window.webkitAudioContext;
     if (!C) return;
     AC = new C(); master = AC.createGain(); master.gain.value = muted ? 0 : 0.7; master.connect(AC.destination);
-    loadSoundFiles();
   }
   if (AC.state === 'suspended') AC.resume();
 }
@@ -1389,8 +1385,8 @@ function playFile(k, out){
 // 緊急地震速報風チャイム（ゲーム用に作ったオリジナル音）
 // 警報音の種類：'file' = 実際の音（sounds/ に置いた音声。無ければ試作A）、'A'/'B'/'C' = 試作音（synth.js）
 const SOUND_MODES = {eq: ['file', 'A', 'B', 'C', 'D'], ms: ['file', 'A', 'B', 'C']};
-// 地震・ミサイルとも試作Aが標準
-const soundMode = kind => lsGet(kind === 'eq' ? 'alertSoundEq' : 'alertSoundMs', 'A');
+// 警報音は地震・ミサイルとも「試作A」で固定（メニューからは変更できない）
+const soundMode = kind => 'A';
 function sfxEEW(){
   const b = newBus(); if (!b) return;
   if (soundMode('eq') === 'file'){
@@ -4014,27 +4010,7 @@ $('drawer').querySelector('.bg').onclick = closeMenu;
 $('menuClose').onclick = closeMenu;
 $('miRank').onclick = () => { closeMenu(); showRanking(); };
 $('miSound').onclick = () => setMuted(!muted);
-const SOUND_LABEL = {file:'実際の音', A:'試作A', B:'試作B', C:'試作C', D:'試作D'};
-function showSoundMode(){
-  $('miSoundEqV').textContent = SOUND_LABEL[soundMode('eq')] || '試作A';
-  $('miSoundMsV').textContent = SOUND_LABEL[soundMode('ms')] || '試作A';
-}
-function cycleSound(kind){
-  const list = SOUND_MODES[kind];
-  const m = list[(list.indexOf(soundMode(kind)) + 1) % list.length];
-  lsSet(kind === 'eq' ? 'alertSoundEq' : 'alertSoundMs', m); showSoundMode();
-  // 選んだ音を少しだけ試しに鳴らす
-  initAudio();
-  if (AC && G.state !== 'alert' && G.state !== 'shake'){
-    const b = newBus(), set = kind === 'eq' ? AlertSynth.EQ : AlertSynth.MS;
-    if (m === 'file'){ if (!playFile(kind, b)) set.A.play(AC, b); }
-    else set[m].play(AC, b);
-    setTimeout(() => { if (G.state !== 'alert' && G.state !== 'shake') stopBus(); }, 2500);
-  }
-}
-$('miSoundEq').onclick = () => cycleSound('eq');
-$('miSoundMs').onclick = () => cycleSound('ms');
-showSoundMode();
+
 
 // ====== プレイ前の確認 ======
 function confirmJoin(){

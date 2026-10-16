@@ -5,7 +5,8 @@
 
 ## 出典
 
-alert.satoru.net で「実際の音」として使用している警報音は、上越市が公開している音声です。
+ゲームの警報音は試作音（synth.js の試作A）で固定しており、音声ファイルは使いません。
+警報音ラボ（sound-lab.html）で本物と聞き比べる場合だけ、上越市が公開している次の音声を参照します。
 
 - 出典元：上越市「デジタル防災行政無線（同報系）システム」
   https://www.city.joetsu.niigata.jp/soshiki/kikikanri/dentatsu.html
@@ -27,4 +28,4 @@ curl -L -o missile.mp3 https://www.city.joetsu.niigata.jp/uploaded/attachment/60
 ```
 
 - mp3 / m4a / wav / ogg のどれでも読み込みます。
-- ファイルが無い場合は、`synth.js` でブラウザ内合成した試作音（実際の音に似せた別の音）が鳴ります。
+- ファイルが無くても、ゲームは試作Aで動きます。

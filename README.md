@@ -68,7 +68,7 @@ server {
 ## 警報音について（出典）
 
 警報音の音声ファイルは **このリポジトリには含めていません**。
-alert.satoru.net の「実際の音」では、上越市が公開している音声を使用しています。
+ゲームでは使用していませんが、`sound-lab.html` の聞き比べ用に、上越市が公開している音声を参照しています。
 
 - 出典：上越市「[デジタル防災行政無線（同報系）システム](https://www.city.joetsu.niigata.jp/soshiki/kikikanri/dentatsu.html)」
   - [緊急地震速報（mp3）](https://www.city.joetsu.niigata.jp/uploaded/attachment/60628.mp3) → `sounds/eew.mp3`
@@ -79,7 +79,7 @@ alert.satoru.net の「実際の音」では、上越市が公開している音
 ### 試作音（synth.js）
 
 実際の警報音に**似せた別の音**を、録音を使わずブラウザで合成しています（MIT）。
-標準では **地震・ミサイルとも試作A** です。☰ メニュー「地震の警報音」「ミサイルの警報音」で切り替えられます（音声ファイルが無い場合は試作Aになります）。
+ゲームの警報音は **地震・ミサイルとも試作A で固定** です（メニューからは変更できません）。
 `sound-lab.html` で本物と聞き比べられます（▶ https://alert.satoru.net/sound-lab.html ）。
 
 | | 試作A | 試作B | 試作C |
